@@ -1,155 +1,313 @@
-import React, { useState } from 'react';
-import { MapContainer, TileLayer, CircleMarker, Circle, Polyline, Marker, Popup } from 'react-leaflet';
-import L from 'leaflet';
+import React, { useState, useEffect, useRef } from 'react';
 import { TrafficNode, Incident } from '../types';
-import { radiusAt } from '../lib/forecast';
 import { AlertTriangle, Zap, Layers } from 'lucide-react';
+import { MapContainer, TileLayer, CircleMarker, Circle, Polyline, Popup, LayerGroup, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import { Circle as LeafletCircle } from 'leaflet';
+
+import { AnimatedIncidentCircle } from './AnimatedIncidentCircle';
+import { radiusAt, severityToColor } from '../utils/radiusAt';
+import { isIncidentConfirmed } from '../utils/verification';
+import { DELHI_CENTER, DELHI_NCR_BOUNDS, DEFAULT_ZOOM, MIN_ZOOM, MAX_ZOOM, TILE_LAYER_URL } from '../constants/map';
+import { FEATURES } from '../constants/features';
+import { CITIES } from '../constants/cities';
 
 interface InteractiveMapProps {
   nodes: TrafficNode[];
   incidents: Incident[];
-  selectedIncidentId: string | null;
+  selectedIncident: Incident | null;
   onSelectIncident: (id: string) => void;
   selectedNodeId: string | null;
   onSelectNode: (id: string) => void;
   forecastMinutesAhead: number;
-  verifications?: Record<string, 'confirmed' | 'unverified'>;
+  detourPositions?: [number, number][];
+  selectedRouteIsAiRecommended?: boolean;
+  selectedCity: string;
 }
 
-const DELHI: [number, number] = [28.61, 77.22];
-const LIGHT_TILES = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+// Inner subcomponent to handle programmatic map viewport transitions
+const MapController: React.FC<{ selectedIncident: Incident | null; selectedCity: string; center: [number, number] }> = ({ selectedIncident, selectedCity, center }) => {
+  const map = useMap();
 
-// Representative AI detour
-const DEMO_DETOUR: [number, number][] = [
-  [28.6315, 77.2167],
-  [28.6290, 77.2250],
-  [28.6180, 77.2430],
-  [28.6000, 77.2400],
-  [28.5760, 77.1740],
-];
+  useEffect(() => {
+    map.flyTo(center, 12, {
+      animate: true,
+      duration: 1.5,
+    });
+  }, [selectedCity, center, map]);
 
-const nodeColor = (status: string) =>
-  status === 'severe' ? '#0a1b3f'
-  : status === 'heavy' ? '#f39c12'
-  : status === 'moderate' ? '#3498db'
-  : '#34c759';
+  useEffect(() => {
+    if (selectedIncident) {
+      map.flyTo([selectedIncident.lat, selectedIncident.lng], 13, {
+        animate: true,
+        duration: 1.2,
+      });
+    }
+  }, [selectedIncident, map]);
 
-const sevColor = (s: string) =>
-  s === 'severe' ? '#0a1b3f'
-  : s === 'heavy' ? '#f39c12'
-  : s === 'moderate' ? '#f1c40f'
-  : '#f1c40f';
-
-const incidentIcon = (selected: boolean, unverified: boolean) => {
-  const c = unverified ? '243,156,18' : '10,27,63'; // yellow/orange vs ink black
-  return L.divIcon({
-    className: '',
-    html: `<div style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;background:rgba(${c},${
-      selected ? '1' : '0.85'
-    });border:2px solid #ffffff;border-radius:100px;color:#fff;font-size:14px;font-weight:bold;box-shadow:0 2px 8px rgba(${c},0.4)">${unverified ? '?' : '⚠'}</div>`,
-    iconSize: [26, 26],
-    iconAnchor: [13, 13],
-  });
+  return null;
 };
 
 export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   nodes,
   incidents,
-  selectedIncidentId,
+  selectedIncident,
   onSelectIncident,
   selectedNodeId,
   onSelectNode,
   forecastMinutesAhead,
-  verifications = {},
+  detourPositions,
+  selectedRouteIsAiRecommended,
+  selectedCity,
 }) => {
-  const [showHeatmap, setShowHeatmap] = useState(true);
+  const [showHeatmap, setShowHeatmap] = useState(FEATURES.heatmap);
   const [showIncidents, setShowIncidents] = useState(true);
-  const [showDetours, setShowDetours] = useState(true);
+  const [showAlternativeRoutes, setShowAlternativeRoutes] = useState(FEATURES.detours);
+  const [mapEngine, setMapEngine] = useState<'leaflet' | 'maplibre' | 'openlayers' | 'google-road' | 'google-satellite'>('leaflet');
 
-  const t = Math.max(0, Math.min(30, forecastMinutesAhead)) / 30;
-  const jamOpacity = 0.15 + t * 0.25;
+  const circleRef = useRef<LeafletCircle | null>(null);
+
+  // Dynamic Tile Layer URL computation
+  const tileUrl = React.useMemo(() => {
+    switch (mapEngine) {
+      case 'maplibre':
+        return 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png';
+      case 'openlayers':
+        return 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+      case 'google-road':
+        return 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
+      case 'google-satellite':
+        return 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}';
+      default:
+        // Design: light CartoDB basemap to match the FlowCast light theme
+        return 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+    }
+  }, [mapEngine]);
+
+  const watermarkText = React.useMemo(() => {
+    const cityName = CITIES[selectedCity].name.toUpperCase();
+    switch (mapEngine) {
+      case 'maplibre':
+        return `${cityName} (MAPLIBRE GL)`;
+      case 'openlayers':
+        return `${cityName} (OPENLAYERS)`;
+      case 'google-road':
+        return `${cityName} (GOOGLE ROADMAP)`;
+      case 'google-satellite':
+        return `${cityName} (GOOGLE SATELLITE)`;
+      default:
+        return `${cityName} (LEAFLET RADAR)`;
+    }
+  }, [selectedCity, mapEngine]);
+
+  // Auto-open selected incident popup after glide transition finishes
+  useEffect(() => {
+    if (selectedIncident && circleRef.current) {
+      const timer = setTimeout(() => {
+        if (circleRef.current) {
+          circleRef.current.openPopup();
+        }
+      }, 1300);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedIncident]);
+
+  const getNodeColor = (status: string) => {
+    switch (status) {
+      case 'severe': return '#D93B2D';
+      case 'heavy': return '#D97706';
+      case 'moderate': return '#2563EB';
+      default: return '#059669';
+    }
+  };
 
   return (
-    <div className="relative w-full aspect-[16/9] md:aspect-[16/8.5] bg-[var(--color-paper-white)] overflow-hidden border border-[var(--color-cloud)] select-none">
+    <div className="relative w-full aspect-[16/9] md:aspect-[16/8.5] bg-[var(--color-paper-white)] overflow-hidden border border-[var(--color-cloud)] group select-none">
+      {/* Leaflet Map Container */}
       <MapContainer
-        center={DELHI}
-        zoom={11}
-        scrollWheelZoom
-        style={{ height: '100%', width: '100%', background: 'var(--color-paper-white)' }}
+        center={CITIES[selectedCity].center}
+        zoom={DEFAULT_ZOOM}
+        minZoom={MIN_ZOOM}
+        maxZoom={MAX_ZOOM}
+        maxBounds={CITIES[selectedCity].bounds}
+        maxBoundsViscosity={1.0}
+        style={{ height: '100%', width: '100%' }}
+        zoomControl={false}
+        attributionControl={false}
       >
-        <TileLayer url={LIGHT_TILES} attribution="&copy; OpenStreetMap &copy; CARTO" />
+        {/* FlyTo Centering Controller */}
+        <MapController selectedIncident={selectedIncident} selectedCity={selectedCity} center={CITIES[selectedCity].center} />
 
-        {/* Jam impact zones */}
-        {showHeatmap &&
-          incidents.map((inc) => {
-            const color = verifications[inc.id] === 'unverified' ? '#f39c12' : sevColor(inc.severity);
-            return (
-              <Circle
-                key={`jam-${inc.id}`}
-                center={[inc.lat, inc.lng]}
-                radius={radiusAt(inc, forecastMinutesAhead)}
-                pathOptions={{ color, weight: 1, fillColor: color, fillOpacity: jamOpacity }}
-              />
-            );
-          })}
+        <TileLayer url={tileUrl} />
 
-        {/* AI detour */}
-        {showDetours && (
-          <Polyline positions={DEMO_DETOUR} pathOptions={{ color: 'var(--color-signal-green)', weight: 4, dashArray: '8 6' }} />
+        {/* Heatmap Overlay Layer */}
+        {showHeatmap && (
+          <LayerGroup>
+            {incidents.map((inc) => {
+              const baseRad = radiusAt(inc, forecastMinutesAhead);
+              const opacity = 0.12 + (forecastMinutesAhead / 30) * 0.12;
+              const color = severityToColor(inc.severity);
+              return (
+                <Circle
+                  key={`heatmap-${inc.id}`}
+                  center={[inc.lat, inc.lng]}
+                  radius={baseRad}
+                  pathOptions={{
+                    fillColor: color,
+                    fillOpacity: opacity,
+                    color: 'transparent',
+                  }}
+                />
+              );
+            })}
+          </LayerGroup>
         )}
 
-        {/* Traffic nodes */}
-        {nodes.map((node) => {
-          const selected = selectedNodeId === node.id;
-          return (
-            <CircleMarker
-              key={node.id}
-              center={[node.lat, node.lng]}
-              radius={selected ? 9 : 6}
-              pathOptions={{ color: '#ffffff', weight: 2, fillColor: nodeColor(node.status), fillOpacity: 1 }}
-              eventHandlers={{ click: () => onSelectNode(node.id) }}
-            >
-              <Popup>
-                <strong>{node.name}</strong>
-                <br />
-                <span style={{ color: nodeColor(node.status) }}>{node.avgSpeedKmh} km/h</span> · +{node.delayMinutes}m
-              </Popup>
-            </CircleMarker>
-          );
-        })}
+        {/* Incidents Layer Group */}
+        {showIncidents && (
+          <LayerGroup>
+            {incidents.map((inc) => {
+              const isSelected = selectedIncident?.id === inc.id;
+              const isConfirmed = isIncidentConfirmed(inc, [], nodes);
+              const color = isConfirmed ? '#D93B2D' : '#D97706';
+              const targetRadius = radiusAt(inc, forecastMinutesAhead);
 
-        {/* Incident markers */}
-        {showIncidents &&
-          incidents.map((inc) => {
-            const unverified = verifications[inc.id] === 'unverified';
+              return (
+                <React.Fragment key={inc.id}>
+                  {/* Pulse Concentric Glow for Selected Marker */}
+                  {isSelected && (
+                    <CircleMarker
+                      center={[inc.lat, inc.lng]}
+                      radius={22}
+                      pathOptions={{
+                        color: color,
+                        weight: 2,
+                        fillColor: color,
+                        fillOpacity: 0.15,
+                        className: 'animate-pulse',
+                      }}
+                    />
+                  )}
+
+                  <AnimatedIncidentCircle
+                    ref={isSelected ? circleRef : null}
+                    center={[inc.lat, inc.lng]}
+                    targetRadius={targetRadius}
+                    color={color}
+                    fillColor={color}
+                    fillOpacity={isSelected ? 0.35 : 0.18}
+                  >
+                    <Popup>
+                      <div className="p-1.5 text-[#1A1A1A] max-w-[210px] font-sans">
+                        <div className="flex items-center gap-1 font-bold text-xs mb-1">
+                          <AlertTriangle className="w-3.5 h-3.5 text-[#D93B2D]" />
+                          <span className="text-[11px] font-bold text-gray-900 leading-tight">{inc.title}</span>
+                        </div>
+                        <span className={`inline-block px-1.5 py-0.5 text-[9px] font-mono font-bold uppercase text-white mb-2 ${isConfirmed ? 'bg-[#D93B2D]' : 'bg-[#D97706]'}`}>
+                          {isConfirmed ? 'Confirmed' : 'Unverified Warning'}
+                        </span>
+                        <p className="text-[10px] m-0 mb-1.5 text-gray-700 leading-tight font-normal font-sans">
+                          {inc.description}
+                        </p>
+                        <div className="text-[9px] font-mono text-gray-500 flex justify-between pt-1 border-t border-gray-200/80">
+                          <span>Delay: +{inc.delayMinutes}m</span>
+                          <span>In: {Math.max(0, inc.startsInMinutes - forecastMinutesAhead)}m</span>
+                        </div>
+                        <div className="text-[9px] font-mono text-gray-400 mt-0.5">
+                          Source: {inc.socialSource}
+                        </div>
+                        <button
+                          onClick={() => onSelectIncident(inc.id)}
+                          className="w-full mt-2.5 bg-[#1A1A1A] text-white py-1 px-2 text-[9px] font-mono uppercase font-bold hover:bg-[#D93B2D] transition-colors border-none cursor-pointer"
+                        >
+                          Inspect Details
+                        </button>
+                      </div>
+                    </Popup>
+                  </AnimatedIncidentCircle>
+                </React.Fragment>
+              );
+            })}
+          </LayerGroup>
+        )}
+
+        {/* Traffic Node Markers */}
+        <LayerGroup>
+          {nodes.map((node) => {
+            const isSelected = selectedNodeId === node.id;
+            const color = getNodeColor(node.status);
+
             return (
-              <Marker
-                key={inc.id}
-                position={[inc.lat, inc.lng]}
-                icon={incidentIcon(selectedIncidentId === inc.id, unverified)}
-                eventHandlers={{ click: () => onSelectIncident(inc.id) }}
+              <CircleMarker
+                key={node.id}
+                center={[node.lat, node.lng]}
+                radius={isSelected ? 9 : 6.5}
+                pathOptions={{
+                  color: isSelected ? '#FFFFFF' : color,
+                  fillColor: color,
+                  fillOpacity: 0.9,
+                  weight: isSelected ? 2.5 : 1.2,
+                }}
+                eventHandlers={{
+                  click: () => onSelectNode(node.id),
+                }}
               >
                 <Popup>
-                  <span style={{ color: unverified ? '#d68910' : 'var(--color-signal-green)', fontWeight: 600, fontSize: 11, fontFamily: 'Inter' }}>
-                    {unverified ? '⚠ UNVERIFIED WARNING' : '✓ CONFIRMED'}
-                  </span>
-                  <br />
-                  <strong style={{ color: 'var(--color-ink-black)', fontFamily: 'Inter' }}>{inc.title}</strong>
-                  <br />
-                  {inc.area}
-                  <br />
-                  Delay +{inc.delayMinutes}m · starts in {inc.startsInMinutes}m · {inc.confidencePercent}% conf
+                  <div className="p-1 text-[#1A1A1A] font-sans">
+                    <div className="font-bold text-xs font-serif">{node.name}</div>
+                    <div className="text-[10px] font-mono mt-1 flex justify-between gap-4">
+                      <span>Status: <span className="font-bold uppercase" style={{ color }}>{node.status}</span></span>
+                      <span>Speed: <b>{node.avgSpeedKmh} km/h</b></span>
+                    </div>
+                    <div className="text-[9px] font-mono text-gray-500 mt-0.5">
+                      Delay: +{node.delayMinutes} mins
+                    </div>
+                    <button
+                      onClick={() => onSelectNode(node.id)}
+                      className="w-full mt-2 bg-[#1A1A1A] text-white py-1 px-2 text-[9px] font-mono uppercase font-bold hover:bg-[#D93B2D] transition-colors border-none cursor-pointer"
+                    >
+                      Inspect Node
+                    </button>
+                  </div>
                 </Popup>
-              </Marker>
+              </CircleMarker>
             );
           })}
+        </LayerGroup>
+
+        {/* Detour Routes Polyline */}
+        {showAlternativeRoutes && detourPositions && detourPositions.length > 0 && (
+          <Polyline
+            positions={detourPositions}
+            pathOptions={{
+              color: selectedRouteIsAiRecommended ? '#10B981' : '#D93B2D',
+              dashArray: '6, 6',
+              weight: 3.5,
+            }}
+          />
+        )}
       </MapContainer>
 
       {/* Layer Controls Bar */}
-      <div className="absolute bottom-4 left-4 bg-[var(--color-card-snow)] border border-[var(--color-cloud)] p-1.5 flex items-center gap-2 text-[12px] z-[1000] shadow-[var(--shadow-sm)] rounded-[100px] font-medium">
+      <div className="absolute bottom-4 left-4 bg-[var(--color-card-snow)] border border-[var(--color-cloud)] p-1.5 flex items-center gap-2 text-[12px] z-[1000] shadow-[var(--shadow-sm)] rounded-[var(--radius-lg)] font-medium">
+        <div className="flex items-center gap-1 bg-[var(--color-paper-white)] px-2 py-1 border border-[var(--color-cloud)] rounded-[100px] text-[var(--color-ink-black)]">
+          <span className="text-[10px] text-[var(--color-graphite)] uppercase tracking-widest">Base Layer</span>
+          <select
+            value={mapEngine}
+            onChange={(e: any) => setMapEngine(e.target.value)}
+            className="bg-transparent border-none text-[10px] font-medium text-[var(--color-ink-black)] outline-none cursor-pointer pr-1 uppercase"
+          >
+            <option value="leaflet">Leaflet (Light)</option>
+            <option value="maplibre">MapLibre GL</option>
+            <option value="openlayers">OpenLayers</option>
+            <option value="google-road">Google Roads</option>
+            <option value="google-satellite">Google Satellite</option>
+          </select>
+        </div>
+
         <button
           onClick={() => setShowHeatmap(!showHeatmap)}
-          className={`px-3 py-1.5 transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] ${
+          className={`px-3 py-1.5 transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
             showHeatmap ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
           }`}
         >
@@ -159,7 +317,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
         <button
           onClick={() => setShowIncidents(!showIncidents)}
-          className={`px-3 py-1.5 transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] ${
+          className={`px-3 py-1.5 transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
             showIncidents ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
           }`}
         >
@@ -168,9 +326,9 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         </button>
 
         <button
-          onClick={() => setShowDetours(!showDetours)}
-          className={`px-3 py-1.5 transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] ${
-            showDetours ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
+          onClick={() => setShowAlternativeRoutes(!showAlternativeRoutes)}
+          className={`px-3 py-1.5 transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
+            showAlternativeRoutes ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
           }`}
         >
           <Zap className="w-3.5 h-3.5 text-[var(--color-signal-green)]" />
@@ -178,12 +336,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         </button>
       </div>
 
-      {/* Map Watermark */}
+      {/* Map Watermark & Live Time */}
       <div className="absolute top-4 right-4 bg-[var(--color-card-snow)] border border-[var(--color-cloud)] px-3 py-1.5 text-[12px] text-[var(--color-ink-black)] flex items-center gap-2 z-[1000] shadow-[var(--shadow-sm)] font-medium rounded-[100px] pointer-events-none">
         <span className="w-2 h-2 rounded-full bg-[var(--color-signal-green)] animate-pulse" />
-        <span>DELHI LIVE RADAR</span>
-        <span className="text-[var(--color-signal-green)] font-semibold">+{forecastMinutesAhead}m</span>
+        <span>{watermarkText}</span>
       </div>
     </div>
   );
 };
+export default InteractiveMap;

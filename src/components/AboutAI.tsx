@@ -37,7 +37,7 @@ export const AboutAI: React.FC = () => {
           How FlowCast Outsmarts Gridlock
         </h2>
         <p className="text-[length:var(--text-body)] text-[var(--color-steel-gray)] leading-[var(--text-body--line-height)]">
-          FlowCast doesn't just display red lines. We synthesize multiple urban data streams into a singular predictive engine.sruptions before vehicles come to a halt.
+          FlowCast doesn't just display red lines. We synthesize multiple urban data streams into a singular predictive engine that forecasts disruptions before vehicles come to a halt.
         </p>
       </div>
 

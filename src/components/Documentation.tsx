@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Terminal, Code, Check, Copy, Database } from 'lucide-react';
+import { Code, Check, Copy, Database } from 'lucide-react';
 
 export const Documentation: React.FC = () => {
   const [copiedEndpoint, setCopiedEndpoint] = useState<string | null>(null);
