@@ -44,57 +44,53 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({ routes }) => {
   };
 
   return (
-    <div className="w-full max-w-[1200px] mx-auto py-8 px-4 flex flex-col gap-8 animate-fade-up">
+    <div className="w-full max-w-[1200px] mx-auto py-12 px-4 flex flex-col gap-12">
       {/* Title Header */}
-      <div className="text-center max-w-2xl mx-auto space-y-2">
-        <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#1A1A1A]/5 border border-[#1A1A1A]/20 text-[#D93B2D] text-xs font-mono font-bold uppercase tracking-widest">
-          <Sparkles className="w-3.5 h-3.5 text-[#D93B2D]" />
-          <span>PREDICTIVE ROUTE OPTIMIZER</span>
-        </div>
-        <h2 className="text-4xl sm:text-5xl font-serif font-black text-[#1A1A1A] tracking-tight">
+      <div className="text-center max-w-2xl mx-auto space-y-4">
+        <h2 className="text-[length:var(--text-heading)] leading-[var(--text-heading--line-height)] font-normal text-[var(--color-ink-black)] tracking-tight">
           Bypass Gridlock Before Maps Turn Red
         </h2>
-        <p className="text-base font-serif text-[#1A1A1A]/70">
+        <p className="text-[length:var(--text-body)] text-[var(--color-steel-gray)] leading-[var(--text-body--line-height)]">
           Compare standard GPS routing against FlowCast's 30-minute predictive cascade algorithm.
         </p>
       </div>
 
       {/* Query Card */}
-      <div className="bg-white border border-[#1A1A1A]/15 p-6 md:p-8 shadow-sm flex flex-col gap-6">
+      <div className="bg-[var(--color-card-snow)] rounded-[var(--radius-cards)] border border-[var(--color-cloud)] p-8 shadow-[var(--shadow-subtle)] flex flex-col gap-8">
         {/* Origin / Destination Inputs */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold font-mono uppercase text-[#D93B2D] tracking-wider flex items-center gap-1.5">
-              <MapPin className="w-4 h-4 text-[#D93B2D]" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <label className="text-[12px] font-medium uppercase text-[var(--color-graphite)] tracking-[var(--tracking-caption)] flex items-center gap-2">
+              <MapPin className="w-4 h-4" />
               <span>Start Location (Origin)</span>
             </label>
             <input
               type="text"
               value={origin}
               onChange={(e) => setOrigin(e.target.value)}
-              className="w-full bg-[#F2F0EB] border border-[#1A1A1A]/20 focus:border-[#D93B2D] px-4 py-3 text-sm font-sans text-[#1A1A1A] outline-none transition-colors"
+              className="w-full bg-white rounded-[100px] border border-[var(--color-cloud)] focus:border-[var(--color-signal-green)] focus:ring-1 focus:ring-[var(--color-signal-green)] px-6 py-3.5 text-[14px] text-[var(--color-ink-black)] outline-none transition-all shadow-[var(--shadow-inner)]"
               placeholder="e.g. Connaught Place"
             />
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold font-mono uppercase text-emerald-700 tracking-wider flex items-center gap-1.5">
-              <Navigation className="w-4 h-4 text-emerald-700" />
+          <div className="space-y-2">
+            <label className="text-[12px] font-medium uppercase text-[var(--color-graphite)] tracking-[var(--tracking-caption)] flex items-center gap-2">
+              <Navigation className="w-4 h-4" />
               <span>Destination</span>
             </label>
             <input
               type="text"
               value={destination}
               onChange={(e) => setDestination(e.target.value)}
-              className="w-full bg-[#F2F0EB] border border-[#1A1A1A]/20 focus:border-[#D93B2D] px-4 py-3 text-sm font-sans text-[#1A1A1A] outline-none transition-colors"
+              className="w-full bg-white rounded-[100px] border border-[var(--color-cloud)] focus:border-[var(--color-signal-green)] focus:ring-1 focus:ring-[var(--color-signal-green)] px-6 py-3.5 text-[14px] text-[var(--color-ink-black)] outline-none transition-all shadow-[var(--shadow-inner)]"
               placeholder="e.g. Cyber City Gurgaon"
             />
           </div>
         </div>
 
         {/* Quick Presets */}
-        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#1A1A1A]/10">
-          <span className="text-xs text-[#1A1A1A]/60 font-mono font-bold uppercase mr-2">Popular Arterials:</span>
+        <div className="flex flex-wrap items-center gap-3 pt-2">
+          <span className="text-[12px] text-[var(--color-graphite)] font-medium uppercase mr-2 tracking-[var(--tracking-caption)]">Popular Arterials:</span>
           {presetPairs.map((pair, idx) => (
             <button
               key={idx}
@@ -102,7 +98,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({ routes }) => {
                 setOrigin(pair.from);
                 setDestination(pair.to);
               }}
-              className="bg-[#F2F0EB] hover:bg-[#1A1A1A] text-[#1A1A1A] hover:text-white border border-[#1A1A1A]/20 px-3 py-1.5 text-xs font-mono font-bold transition-colors cursor-pointer"
+              className="bg-[var(--color-paper-white)] hover:bg-[var(--color-cloud)] text-[var(--color-body-charcoal)] border border-[var(--color-cloud)] px-4 py-2 rounded-[100px] text-[12px] font-medium transition-colors cursor-pointer"
             >
               {pair.from} → {pair.to}
             </button>
@@ -110,20 +106,20 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({ routes }) => {
         </div>
 
         {/* Time Horizon Slider + Submit Button */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-[#1A1A1A]/10">
-          <div className="flex items-center gap-3">
-            <Clock className="w-5 h-5 text-[#D93B2D]" />
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-6 pt-6 border-t border-[var(--color-mist)]">
+          <div className="flex items-center gap-4">
+            <Clock className="w-5 h-5 text-[var(--color-graphite)]" />
             <div>
-              <div className="text-xs font-bold font-mono text-[#1A1A1A] uppercase">Forecast Horizon:</div>
-              <div className="text-xs text-[#1A1A1A]/60 font-sans">Predicting road conditions in +{forecastHorizon} mins</div>
+              <div className="text-[12px] font-medium text-[var(--color-ink-black)] uppercase tracking-[var(--tracking-caption)]">Forecast Horizon:</div>
+              <div className="text-[12px] text-[var(--color-steel-gray)]">Predicting road conditions in +{forecastHorizon} mins</div>
             </div>
-            <div className="flex items-center gap-1 bg-[#F2F0EB] p-1 border border-[#1A1A1A]/20 ml-2">
+            <div className="flex items-center gap-2 bg-[var(--color-paper-white)] p-1 rounded-[100px] border border-[var(--color-cloud)] ml-4">
               {[15, 30, 45, 60].map((m) => (
                 <button
                   key={m}
                   onClick={() => setForecastHorizon(m)}
-                  className={`px-2.5 py-1 text-xs font-mono font-bold cursor-pointer transition-colors ${
-                    forecastHorizon === m ? 'bg-[#1A1A1A] text-white' : 'text-[#1A1A1A]/70 hover:text-[#1A1A1A]'
+                  className={`px-4 py-1.5 text-[14px] font-medium rounded-[100px] cursor-pointer transition-colors ${
+                    forecastHorizon === m ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
                   }`}
                 >
                   +{m}m
@@ -135,7 +131,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({ routes }) => {
           <button
             onClick={handleAnalyze}
             disabled={loading}
-            className="w-full sm:w-auto bg-[#1A1A1A] hover:bg-[#D93B2D] text-white px-8 py-3 font-mono font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer shadow-sm transition-colors"
+            className="w-full sm:w-auto bg-[var(--color-signal-green)] text-white hover:opacity-90 px-8 py-3.5 rounded-[100px] font-medium text-[14px] flex items-center justify-center gap-2 cursor-pointer transition-opacity"
           >
             <Sparkles className={`w-4 h-4 text-white ${loading ? 'animate-spin' : ''}`} />
             <span>{loading ? 'Simulating...' : 'Analyze AI Detours'}</span>
@@ -145,39 +141,39 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({ routes }) => {
 
       {/* AI Custom Analysis Output if available */}
       {aiAnalysis && (
-        <div className="bg-white border-2 border-[#D93B2D] p-6 shadow-md flex flex-col gap-4 animate-fade-up">
-          <div className="flex items-center justify-between border-b border-[#1A1A1A]/15 pb-3">
-            <span className="text-sm font-bold font-serif text-[#D93B2D] flex items-center gap-2">
-              <Zap className="w-5 h-5 text-emerald-700" />
+        <div className="bg-[var(--color-blush-mist)] border border-[var(--color-mist)] rounded-[var(--radius-cards)] p-8 shadow-[var(--shadow-subtle)] flex flex-col gap-6 animate-fade-up">
+          <div className="flex items-center justify-between border-b border-[var(--color-mist)] pb-4">
+            <span className="text-[length:var(--text-subheading)] font-medium text-[var(--color-ink-black)] flex items-center gap-3">
+              <Zap className="w-5 h-5 text-[var(--color-signal-green)]" />
               <span>Gemini AI Route Disruption Investigation</span>
             </span>
-            <span className="bg-[#D93B2D] text-white px-3 py-1 font-mono font-bold text-xs uppercase">
+            <span className="bg-[var(--color-signal-green)]/10 text-[var(--color-signal-green)] px-3 py-1 font-medium text-[10px] uppercase tracking-[var(--tracking-caption)] rounded-[100px]">
               {aiAnalysis.riskLevel || 'High Risk on Standard GPS'}
             </span>
           </div>
 
-          <div className="text-sm text-[#1A1A1A] leading-relaxed font-sans">
+          <div className="text-[length:var(--text-body)] text-[var(--color-body-charcoal)] leading-[var(--text-body--line-height)]">
             {aiAnalysis.aiAnalysis}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-            <div className="bg-[#F2F0EB] p-4 border border-[#1A1A1A]/15">
-              <div className="text-xs text-[#1A1A1A]/60 font-mono font-bold uppercase">Recommended AI Detour</div>
-              <div className="text-base font-serif font-bold text-emerald-700 mt-1">{aiAnalysis.recommendedDetourName || 'Via Lodi Road & Dhaula Kuan Express'}</div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+            <div className="bg-[var(--color-card-snow)] rounded-[var(--radius-lg)] p-6 border border-[var(--color-cloud)]">
+              <div className="text-[12px] text-[var(--color-graphite)] font-medium uppercase tracking-[var(--tracking-caption)]">Recommended AI Detour</div>
+              <div className="text-[length:var(--text-heading-sm)] font-medium text-[var(--color-signal-green)] mt-2">{aiAnalysis.recommendedDetourName || 'Via Lodi Road & Dhaula Kuan Express'}</div>
             </div>
 
-            <div className="bg-[#F2F0EB] p-4 border border-[#1A1A1A]/15">
-              <div className="text-xs text-[#1A1A1A]/60 font-mono font-bold uppercase">Time Saved</div>
-              <div className="text-2xl font-serif font-bold text-[#1A1A1A] mt-1">
+            <div className="bg-[var(--color-card-snow)] rounded-[var(--radius-lg)] p-6 border border-[var(--color-cloud)]">
+              <div className="text-[12px] text-[var(--color-graphite)] font-medium uppercase tracking-[var(--tracking-caption)]">Time Saved</div>
+              <div className="text-[length:var(--text-heading)] font-normal text-[var(--color-ink-black)] mt-2">
                 {aiAnalysis.timeSavedMinutes || 18} Mins
               </div>
             </div>
 
-            <div className="bg-[#F2F0EB] p-4 border border-[#1A1A1A]/15">
-              <div className="text-xs text-[#1A1A1A]/60 font-mono font-bold uppercase">Avoid Chokepoints</div>
-              <div className="text-xs text-[#D93B2D] mt-1 flex flex-wrap gap-1 font-mono font-bold">
+            <div className="bg-[var(--color-card-snow)] rounded-[var(--radius-lg)] p-6 border border-[var(--color-cloud)]">
+              <div className="text-[12px] text-[var(--color-graphite)] font-medium uppercase tracking-[var(--tracking-caption)]">Avoid Chokepoints</div>
+              <div className="mt-3 flex flex-wrap gap-2">
                 {(aiAnalysis.keyChokepointsToAvoid || ['AIIMS Junction', 'CP Regal Circle', 'Ring Road South']).map((pt: string, i: number) => (
-                  <span key={i} className="bg-[#D93B2D]/10 px-2 py-0.5 border border-[#D93B2D]/30">
+                  <span key={i} className="bg-white px-3 py-1 text-[12px] font-medium text-[var(--color-graphite)] rounded-[100px] border border-[var(--color-cloud)]">
                     {pt}
                   </span>
                 ))}
@@ -188,56 +184,56 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({ routes }) => {
       )}
 
       {/* Preset Route Options Comparison Cards */}
-      <div className="space-y-4">
-        <h3 className="text-xl font-serif font-bold text-[#1A1A1A] flex items-center gap-2">
+      <div className="space-y-6">
+        <h3 className="text-[length:var(--text-heading-sm)] font-medium text-[var(--color-ink-black)] flex items-center gap-3">
           <span>AI Multi-Route Comparison</span>
-          <span className="text-xs font-mono text-[#1A1A1A]/60 font-normal">({origin} to {destination})</span>
+          <span className="text-[14px] text-[var(--color-steel-gray)] font-normal">({origin} to {destination})</span>
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {routes.map((rt) => (
             <div
               key={rt.id}
-              className={`p-6 bg-white border flex flex-col justify-between gap-4 transition-all shadow-sm ${
+              className={`p-8 rounded-[var(--radius-cards)] flex flex-col justify-between gap-6 transition-all shadow-[var(--shadow-subtle)] border ${
                 rt.isAiRecommended
-                  ? 'border-2 border-emerald-700 bg-[#F2F0EB]'
-                  : 'border-[#1A1A1A]/15'
+                  ? 'border-[var(--color-signal-green)] bg-[var(--color-blush-mist)]'
+                  : 'border-[var(--color-cloud)] bg-[var(--color-card-snow)]'
               }`}
             >
-              <div className="space-y-2">
+              <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   {rt.isAiRecommended ? (
-                    <span className="bg-emerald-700 text-white text-[10px] uppercase font-mono font-bold px-2 py-0.5 flex items-center gap-1">
+                    <span className="bg-[var(--color-signal-green)] text-white text-[10px] uppercase font-medium tracking-[var(--tracking-caption)] px-3 py-1 rounded-[100px] flex items-center gap-1.5">
                       <ShieldCheck className="w-3 h-3" />
                       <span>Recommended Detour</span>
                     </span>
                   ) : (
-                    <span className="bg-[#1A1A1A]/10 text-[#1A1A1A] text-[10px] uppercase font-mono font-bold px-2 py-0.5">
+                    <span className="bg-[var(--color-paper-white)] border border-[var(--color-cloud)] text-[var(--color-graphite)] text-[10px] uppercase font-medium tracking-[var(--tracking-caption)] px-3 py-1 rounded-[100px]">
                       Standard GPS
                     </span>
                   )}
-                  <span className="text-xs font-mono font-bold text-[#1A1A1A]/60">{rt.distanceKm} km</span>
+                  <span className="text-[14px] font-medium text-[var(--color-steel-gray)]">{rt.distanceKm} km</span>
                 </div>
 
-                <h4 className="font-serif font-bold text-lg text-[#1A1A1A]">{rt.name}</h4>
-                <p className="text-xs text-[#1A1A1A]/70 font-sans">{rt.viaRoads}</p>
+                <h4 className="font-medium text-[length:var(--text-subheading)] text-[var(--color-ink-black)]">{rt.name}</h4>
+                <p className="text-[14px] text-[var(--color-steel-gray)] leading-relaxed">{rt.viaRoads}</p>
               </div>
 
-              <div className="pt-3 border-t border-[#1A1A1A]/15 space-y-2">
+              <div className="pt-6 border-t border-[var(--color-mist)] space-y-4">
                 <div className="flex justify-between items-baseline">
-                  <span className="text-xs text-[#1A1A1A]/60 font-mono">Predicted Time:</span>
-                  <span className="text-2xl font-serif font-bold text-[#1A1A1A]">{rt.predictedTimeMins} min</span>
+                  <span className="text-[14px] text-[var(--color-graphite)] font-medium">Predicted Time:</span>
+                  <span className="text-[length:var(--text-heading-sm)] font-medium text-[var(--color-ink-black)]">{rt.predictedTimeMins} min</span>
                 </div>
 
-                <div className="flex justify-between text-xs font-mono">
-                  <span className="text-[#1A1A1A]/60">Expected Delay:</span>
-                  <span className={rt.delayMins > 15 ? 'text-[#D93B2D] font-bold' : 'text-emerald-700 font-bold'}>
+                <div className="flex justify-between text-[14px] font-medium">
+                  <span className="text-[var(--color-graphite)]">Expected Delay:</span>
+                  <span className={rt.delayMins > 15 ? 'text-red-500' : 'text-[var(--color-signal-green)]'}>
                     +{rt.delayMins} min
                   </span>
                 </div>
 
-                <div className="text-[11px] text-[#1A1A1A]/80 bg-[#F2F0EB] p-2.5 border border-[#1A1A1A]/15 mt-2 font-mono">
-                  <span className="font-bold text-[#1A1A1A]">Key Points: </span>
+                <div className="text-[12px] text-[var(--color-body-charcoal)] bg-white rounded-[var(--radius-lg)] p-4 border border-[var(--color-cloud)] mt-2">
+                  <span className="font-medium text-[var(--color-ink-black)]">Key Points: </span>
                   {rt.congestionPoints.join(', ')}
                 </div>
               </div>

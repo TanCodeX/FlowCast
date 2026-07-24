@@ -94,24 +94,24 @@ export const DemoSimulationModal: React.FC<DemoSimulationModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#1A1A1A]/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-up">
-      <div className="bg-white border-2 border-[#1A1A1A] max-w-lg w-full p-6 shadow-2xl flex flex-col gap-6 relative">
+    <div className="fixed inset-0 z-50 bg-[var(--color-ink-black)]/40 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-up">
+      <div className="bg-[var(--color-card-snow)] rounded-[var(--radius-cards)] max-w-lg w-full p-8 shadow-[var(--shadow-xl)] border border-[var(--color-cloud)] flex flex-col gap-6 relative">
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-[#1A1A1A]/60 hover:text-[#1A1A1A] p-1 border border-transparent hover:border-[#1A1A1A]/20 cursor-pointer transition-colors"
+          className="absolute top-6 right-6 text-[var(--color-graphite)] hover:text-[var(--color-ink-black)] p-2 rounded-full hover:bg-[var(--color-paper-white)] cursor-pointer transition-colors"
         >
           <X className="w-5 h-5" />
         </button>
 
         {/* Header */}
-        <div className="space-y-1">
-          <div className="inline-flex items-center gap-1.5 text-xs font-mono font-bold text-[#D93B2D] bg-[#D93B2D]/10 px-2.5 py-1 border border-[#D93B2D]/30 uppercase tracking-wider">
-            <Sparkles className="w-3.5 h-3.5 text-[#D93B2D]" />
+        <div className="space-y-2 pr-8">
+          <div className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--color-signal-green)] uppercase tracking-[var(--tracking-caption)]">
+            <Sparkles className="w-3.5 h-3.5" />
             <span>DISRUPTIVE SCENARIO SIMULATOR</span>
           </div>
-          <h3 className="text-2xl font-serif font-black text-[#1A1A1A] tracking-tight">Simulate Real-time Incident</h3>
-          <p className="text-xs font-serif text-[#1A1A1A]/70">
+          <h3 className="text-[var(--text-subheading)] leading-[var(--text-subheading--line-height)] font-medium text-[var(--color-ink-black)]">Simulate Real-time Incident</h3>
+          <p className="text-[14px] text-[var(--color-steel-gray)] leading-relaxed">
             Inject a sudden traffic event to observe how FlowCast updates node forecasts & detour routes 30 mins in advance.
           </p>
         </div>
@@ -124,27 +124,27 @@ export const DemoSimulationModal: React.FC<DemoSimulationModalProps> = ({
               <div
                 key={idx}
                 onClick={() => setSelectedScenario(idx)}
-                className={`p-3.5 border transition-all cursor-pointer flex items-start gap-3 ${
+                className={`p-4 rounded-[var(--radius-lg)] border transition-all cursor-pointer flex items-start gap-4 ${
                   isSelected
-                    ? 'bg-[#F2F0EB] border-2 border-[#1A1A1A]'
-                    : 'bg-white border-[#1A1A1A]/20 hover:border-[#1A1A1A]/50'
+                    ? 'bg-[var(--color-blush-mist)] border-[var(--color-signal-green)]'
+                    : 'bg-white border-[var(--color-cloud)] hover:border-[var(--color-mist)]'
                 }`}
               >
-                <div className={`mt-0.5 w-5 h-5 border flex items-center justify-center shrink-0 ${
-                  isSelected ? 'border-[#1A1A1A] bg-[#1A1A1A] text-white' : 'border-[#1A1A1A]/30 bg-white'
+                <div className={`mt-0.5 w-5 h-5 rounded-[100px] border flex items-center justify-center shrink-0 ${
+                  isSelected ? 'border-[var(--color-signal-green)] bg-[var(--color-signal-green)] text-white' : 'border-[var(--color-mist)] bg-[var(--color-paper-white)]'
                 }`}>
-                  {isSelected && <Check className="w-3.5 h-3.5" />}
+                  {isSelected && <Check className="w-3 h-3" />}
                 </div>
 
-                <div className="flex-grow space-y-1">
+                <div className="flex-grow space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-serif font-bold text-[#1A1A1A]">{sc.title}</span>
-                    <span className="text-xs font-mono font-bold text-[#D93B2D] bg-[#D93B2D]/10 px-1.5 py-0.5 border border-[#D93B2D]/30">
+                    <span className="text-[14px] font-medium text-[var(--color-ink-black)]">{sc.title}</span>
+                    <span className="text-[12px] font-medium text-[var(--color-signal-green)] bg-[var(--color-signal-green)]/10 px-2 py-0.5 rounded-[100px]">
                       +{sc.delay}m
                     </span>
                   </div>
-                  <div className="text-[11px] font-mono font-bold text-[#D93B2D]">{sc.area}</div>
-                  <div className="text-[11px] font-sans text-[#1A1A1A]/70 leading-tight">{sc.desc}</div>
+                  <div className="text-[12px] font-medium text-[var(--color-signal-green)]">{sc.area}</div>
+                  <div className="text-[13px] text-[var(--color-steel-gray)] leading-relaxed">{sc.desc}</div>
                 </div>
               </div>
             );
@@ -152,16 +152,16 @@ export const DemoSimulationModal: React.FC<DemoSimulationModalProps> = ({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-3 pt-2 border-t border-[#1A1A1A]/15">
+        <div className="flex items-center justify-end gap-4 pt-4 border-t border-[var(--color-mist)]">
           <button
             onClick={onClose}
-            className="px-4 py-2 font-mono text-xs font-bold text-[#1A1A1A]/70 hover:text-[#1A1A1A] cursor-pointer uppercase"
+            className="px-4 py-2 text-[14px] font-medium text-[var(--color-graphite)] hover:text-[var(--color-ink-black)] cursor-pointer"
           >
             Cancel
           </button>
           <button
             onClick={handleApplyScenario}
-            className="bg-[#1A1A1A] hover:bg-[#D93B2D] text-white px-5 py-2.5 text-xs font-mono font-bold uppercase tracking-widest flex items-center gap-2 cursor-pointer transition-colors shadow-sm"
+            className="bg-[var(--color-signal-green)] hover:opacity-90 text-white px-6 py-2.5 rounded-[100px] text-[14px] font-medium flex items-center gap-2 cursor-pointer transition-opacity"
           >
             <Zap className="w-4 h-4 text-white" />
             <span>Inject & Recalculate AI</span>

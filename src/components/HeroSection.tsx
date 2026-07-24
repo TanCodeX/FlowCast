@@ -1,62 +1,55 @@
 import React from 'react';
-import { ArrowRight, Sparkles } from 'lucide-react';
 
 interface HeroSectionProps {
   onLaunchDemo: () => void;
   onExploreRoutePlanner: () => void;
 }
 
-export const HeroSection: React.FC<HeroSectionProps> = ({ onLaunchDemo, onExploreRoutePlanner }) => {
+export const HeroSection: React.FC<HeroSectionProps> = ({ onLaunchDemo }) => {
   return (
-    <section className="flex flex-col items-center text-center max-w-[960px] w-full mx-auto pt-8 pb-10 px-4 gap-6">
-      {/* Editorial Eyebrow Tag */}
-      <a
-        href="#features"
-        onClick={(e) => {
-          e.preventDefault();
-          const el = document.getElementById('features');
-          if (el) el.scrollIntoView({ behavior: 'smooth' });
-        }}
-        className="animate-fade-up inline-flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/15 hover:border-[#D93B2D] transition-all duration-300 group cursor-pointer"
-      >
-        <span className="w-2 h-2 rounded-full bg-[#D93B2D] animate-pulse" />
-        <span className="text-[11px] font-bold text-[#D93B2D] uppercase tracking-[0.2em] font-mono">
-          PREDICTIVE VS REACTIVE TRAFFIC INVESTIGATION →
-        </span>
-      </a>
+    <section className="relative flex flex-col items-center pt-24 pb-16 px-4 w-full text-center">
+      {/* Dawn Wash Atmospheric Light */}
+      <div className="absolute top-[-100px] left-0 right-0 h-[600px] pointer-events-none z-0" style={{ background: 'linear-gradient(180deg, rgba(150, 223, 255, 0.4) 0%, rgba(237, 237, 237, 0.2) 58.17%, rgba(245, 245, 244, 0) 100%)' }} />
 
-      {/* Main Serif Headline */}
-      <h1 className="font-serif font-black text-5xl sm:text-7xl md:text-8xl lg:text-[92px] leading-[0.92] tracking-tight text-[#F2F0EB] animate-fade-up">
-        Predict{' '}
-        <span className="text-[#D93B2D] italic font-serif font-normal">
-          disruptions
-        </span>
-        <br />
-        before they happen.
-      </h1>
+      <div className="relative z-10 flex flex-col items-center gap-8 w-full max-w-[800px]">
+        {/* Social Proof Badge */}
+        <div className="flex items-center gap-2 bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[100px] px-3 py-1.5 shadow-[var(--shadow-subtle-4)]">
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-signal-green)]"></span>
+          <span className="text-[12px] text-[var(--color-body-charcoal)] font-medium">7,000+ Active Sensors</span>
+        </div>
 
-      {/* Editorial Subtitle */}
-      <p className="text-base sm:text-xl text-[#F2F0EB]/75 font-serif max-w-[680px] leading-relaxed animate-fade-up">
-        FlowCast synthesizes real-time social telemetry and neural cascade modeling to forecast municipal gridlock 30 minutes before maps turn red.
-      </p>
+        {/* Display Headline */}
+        <h1 className="text-[length:var(--text-heading-lg)] leading-[var(--text-heading-lg--line-height)] tracking-[var(--text-heading-lg--letter-spacing)] md:text-[length:var(--text-display)] md:leading-[var(--text-display--line-height)] md:tracking-[var(--text-display--letter-spacing)] font-normal text-[var(--color-ink-black)]">
+          Predict disruptions <br className="hidden md:block" />
+          before they happen.
+        </h1>
 
-      {/* Editorial CTA Buttons */}
-      <div className="pt-2 animate-fade-up flex flex-col sm:flex-row items-center gap-4">
+        {/* Body Description */}
+        <p className="text-[length:var(--text-body)] leading-[var(--text-body--line-height)] text-[var(--color-steel-gray)] max-w-[600px]">
+          FlowCast synthesizes real-time social telemetry and neural cascade modeling to forecast municipal gridlock 30 minutes before maps turn red.
+        </p>
+
+        {/* Primary CTA */}
         <button
           onClick={onLaunchDemo}
-          className="bg-[#F2F0EB] text-[#1A1A1A] hover:bg-[#D93B2D] hover:text-white transition-all duration-300 px-8 py-4 font-bold text-xs uppercase tracking-widest flex items-center gap-3 cursor-pointer shadow-md w-full sm:w-auto justify-center font-mono group"
+          className="bg-[var(--color-signal-green)] text-white font-medium text-[14px] rounded-[100px] px-8 py-3.5 shadow-[var(--shadow-sm)] hover:opacity-90 transition-opacity mt-4 cursor-pointer"
         >
-          <Sparkles className="w-4 h-4 text-[#1A1A1A] group-hover:text-white transition-colors" />
-          <span>Launch Live Demo</span>
+          Launch Live Demo
         </button>
 
-        <button
-          onClick={onExploreRoutePlanner}
-          className="bg-transparent text-[#F2F0EB] hover:bg-white/5 border border-white/20 transition-all duration-200 px-6 py-4 font-bold text-xs uppercase tracking-widest flex items-center gap-2 cursor-pointer w-full sm:w-auto justify-center font-mono"
-        >
-          <span>Plan AI Route</span>
-          <ArrowRight className="w-4 h-4 text-[#F2F0EB]" />
-        </button>
+        {/* Trust Logo Bar */}
+        <div className="mt-16 flex flex-col items-center gap-6">
+          <span className="text-[10px] font-medium uppercase tracking-[0.036em] text-[var(--color-graphite)]">
+            Trusted by municipalities & enterprises
+          </span>
+          <div className="flex flex-wrap items-center justify-center gap-8 md:gap-16 opacity-50 grayscale">
+            {/* Logos represented by text for now */}
+            <span className="text-xl font-bold text-[var(--color-body-charcoal)] tracking-tighter">Delhi Metro</span>
+            <span className="text-xl font-bold text-[var(--color-body-charcoal)] tracking-tighter">TomTom</span>
+            <span className="text-xl font-bold text-[var(--color-body-charcoal)] tracking-tighter">NHAI</span>
+            <span className="text-xl font-bold text-[var(--color-body-charcoal)] tracking-tighter">DTC</span>
+          </div>
+        </div>
       </div>
     </section>
   );

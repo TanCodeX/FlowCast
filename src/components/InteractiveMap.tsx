@@ -17,11 +17,9 @@ interface InteractiveMapProps {
 }
 
 const DELHI: [number, number] = [28.61, 77.22];
-const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+const LIGHT_TILES = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 
-// Representative AI detour (CP -> Barakhamba -> Pragati -> Ring Road South).
-// ponytail: one static illustrative detour, matches the old single SVG detour.
-// Swap for a real routing engine (OSRM/Mapbox) in Phase 2.
+// Representative AI detour
 const DEMO_DETOUR: [number, number][] = [
   [28.6315, 77.2167],
   [28.6290, 77.2250],
@@ -31,24 +29,24 @@ const DEMO_DETOUR: [number, number][] = [
 ];
 
 const nodeColor = (status: string) =>
-  status === 'severe' ? '#D93B2D'
-  : status === 'heavy' ? '#D97706'
-  : status === 'moderate' ? '#2563EB'
-  : '#059669';
+  status === 'severe' ? '#0a1b3f'
+  : status === 'heavy' ? '#f39c12'
+  : status === 'moderate' ? '#3498db'
+  : '#34c759';
 
 const sevColor = (s: string) =>
-  s === 'severe' ? '#D93B2D'
-  : s === 'heavy' ? '#D97706'
-  : s === 'moderate' ? '#F59E0B'
-  : '#eab308';
+  s === 'severe' ? '#0a1b3f'
+  : s === 'heavy' ? '#f39c12'
+  : s === 'moderate' ? '#f1c40f'
+  : '#f1c40f';
 
 const incidentIcon = (selected: boolean, unverified: boolean) => {
-  const c = unverified ? '234,179,8' : '217,59,45'; // yellow vs red
+  const c = unverified ? '243,156,18' : '10,27,63'; // yellow/orange vs ink black
   return L.divIcon({
     className: '',
     html: `<div style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;background:rgba(${c},${
       selected ? '1' : '0.85'
-    });border:2px solid #16191A;color:#fff;font-size:14px;font-weight:bold;box-shadow:0 0 8px rgba(${c},0.7)">${unverified ? '?' : '⚠'}</div>`,
+    });border:2px solid #ffffff;border-radius:100px;color:#fff;font-size:14px;font-weight:bold;box-shadow:0 2px 8px rgba(${c},0.4)">${unverified ? '?' : '⚠'}</div>`,
     iconSize: [26, 26],
     iconAnchor: [13, 13],
   });
@@ -72,19 +70,19 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const jamOpacity = 0.15 + t * 0.25;
 
   return (
-    <div className="relative w-full aspect-[16/9] md:aspect-[16/8.5] bg-[#16191A] overflow-hidden border border-[#1A1A1A] select-none">
+    <div className="relative w-full aspect-[16/9] md:aspect-[16/8.5] bg-[var(--color-paper-white)] overflow-hidden border border-[var(--color-cloud)] select-none">
       <MapContainer
         center={DELHI}
         zoom={11}
         scrollWheelZoom
-        style={{ height: '100%', width: '100%', background: '#16191A' }}
+        style={{ height: '100%', width: '100%', background: 'var(--color-paper-white)' }}
       >
-        <TileLayer url={DARK_TILES} attribution="&copy; OpenStreetMap &copy; CARTO" />
+        <TileLayer url={LIGHT_TILES} attribution="&copy; OpenStreetMap &copy; CARTO" />
 
-        {/* Jam impact zones (grow with forecast horizon; yellow until Confirmed) */}
+        {/* Jam impact zones */}
         {showHeatmap &&
           incidents.map((inc) => {
-            const color = verifications[inc.id] === 'unverified' ? '#eab308' : sevColor(inc.severity);
+            const color = verifications[inc.id] === 'unverified' ? '#f39c12' : sevColor(inc.severity);
             return (
               <Circle
                 key={`jam-${inc.id}`}
@@ -97,7 +95,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
         {/* AI detour */}
         {showDetours && (
-          <Polyline positions={DEMO_DETOUR} pathOptions={{ color: '#10B981', weight: 3, dashArray: '8 6' }} />
+          <Polyline positions={DEMO_DETOUR} pathOptions={{ color: 'var(--color-signal-green)', weight: 4, dashArray: '8 6' }} />
         )}
 
         {/* Traffic nodes */}
@@ -108,7 +106,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
               key={node.id}
               center={[node.lat, node.lng]}
               radius={selected ? 9 : 6}
-              pathOptions={{ color: '#16191A', weight: 2, fillColor: nodeColor(node.status), fillOpacity: 1 }}
+              pathOptions={{ color: '#ffffff', weight: 2, fillColor: nodeColor(node.status), fillOpacity: 1 }}
               eventHandlers={{ click: () => onSelectNode(node.id) }}
             >
               <Popup>
@@ -132,11 +130,11 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 eventHandlers={{ click: () => onSelectIncident(inc.id) }}
               >
                 <Popup>
-                  <span style={{ color: unverified ? '#a16207' : '#059669', fontWeight: 700, fontSize: 11 }}>
+                  <span style={{ color: unverified ? '#d68910' : 'var(--color-signal-green)', fontWeight: 600, fontSize: 11, fontFamily: 'Inter' }}>
                     {unverified ? '⚠ UNVERIFIED WARNING' : '✓ CONFIRMED'}
                   </span>
                   <br />
-                  <strong style={{ color: '#D93B2D' }}>{inc.title}</strong>
+                  <strong style={{ color: 'var(--color-ink-black)', fontFamily: 'Inter' }}>{inc.title}</strong>
                   <br />
                   {inc.area}
                   <br />
@@ -148,43 +146,43 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       </MapContainer>
 
       {/* Layer Controls Bar */}
-      <div className="absolute bottom-3 left-3 bg-white/95 border border-[#1A1A1A] p-1.5 flex items-center gap-2 text-[11px] z-[1000] shadow-md font-mono">
+      <div className="absolute bottom-4 left-4 bg-[var(--color-card-snow)] border border-[var(--color-cloud)] p-1.5 flex items-center gap-2 text-[12px] z-[1000] shadow-[var(--shadow-sm)] rounded-[100px] font-medium">
         <button
           onClick={() => setShowHeatmap(!showHeatmap)}
-          className={`px-2.5 py-1 transition-colors flex items-center gap-1.5 cursor-pointer uppercase font-bold ${
-            showHeatmap ? 'bg-[#1A1A1A] text-white' : 'text-[#1A1A1A]/70 hover:text-[#1A1A1A]'
+          className={`px-3 py-1.5 transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] ${
+            showHeatmap ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
           }`}
         >
-          <Layers className="w-3 h-3 text-[#D93B2D]" />
+          <Layers className="w-3.5 h-3.5" />
           <span>Heatmap</span>
         </button>
 
         <button
           onClick={() => setShowIncidents(!showIncidents)}
-          className={`px-2.5 py-1 transition-colors flex items-center gap-1.5 cursor-pointer uppercase font-bold ${
-            showIncidents ? 'bg-[#1A1A1A] text-white' : 'text-[#1A1A1A]/70 hover:text-[#1A1A1A]'
+          className={`px-3 py-1.5 transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] ${
+            showIncidents ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
           }`}
         >
-          <AlertTriangle className="w-3 h-3 text-[#D93B2D]" />
+          <AlertTriangle className="w-3.5 h-3.5" />
           <span>Incidents</span>
         </button>
 
         <button
           onClick={() => setShowDetours(!showDetours)}
-          className={`px-2.5 py-1 transition-colors flex items-center gap-1.5 cursor-pointer uppercase font-bold ${
-            showDetours ? 'bg-[#1A1A1A] text-white' : 'text-[#1A1A1A]/70 hover:text-[#1A1A1A]'
+          className={`px-3 py-1.5 transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] ${
+            showDetours ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
           }`}
         >
-          <Zap className="w-3 h-3 text-emerald-600" />
+          <Zap className="w-3.5 h-3.5 text-[var(--color-signal-green)]" />
           <span>AI Detours</span>
         </button>
       </div>
 
       {/* Map Watermark */}
-      <div className="absolute top-3 right-3 bg-white/95 border border-[#1A1A1A] px-3 py-1 text-[11px] font-mono text-[#1A1A1A] flex items-center gap-2 z-[1000] shadow-sm font-bold pointer-events-none">
-        <span className="w-2 h-2 rounded-full bg-[#D93B2D] animate-pulse" />
+      <div className="absolute top-4 right-4 bg-[var(--color-card-snow)] border border-[var(--color-cloud)] px-3 py-1.5 text-[12px] text-[var(--color-ink-black)] flex items-center gap-2 z-[1000] shadow-[var(--shadow-sm)] font-medium rounded-[100px] pointer-events-none">
+        <span className="w-2 h-2 rounded-full bg-[var(--color-signal-green)] animate-pulse" />
         <span>DELHI LIVE RADAR</span>
-        <span className="text-[#D93B2D] font-bold">+{forecastMinutesAhead}m</span>
+        <span className="text-[var(--color-signal-green)] font-semibold">+{forecastMinutesAhead}m</span>
       </div>
     </div>
   );

@@ -123,8 +123,8 @@ export default function App() {
   };
 
   return (
-    <div className="bg-[#101415] text-[#e0e3e5] min-h-screen flex flex-col font-sans selection:bg-[#3a8dff] selection:text-white">
-      {/* Top Bar Header */}
+    <div className="bg-[var(--color-paper-white)] text-[var(--color-body-charcoal)] min-h-screen flex flex-col selection:bg-[var(--color-signal-green)] selection:text-white">
+      {/* Top Bar Header / Floating Nav */}
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -132,7 +132,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-grow flex flex-col items-center justify-start py-8 px-4 md:px-8 w-full max-w-[1440px] mx-auto overflow-hidden gap-10">
+      <main className="flex-grow flex flex-col items-center justify-start py-8 px-4 md:px-8 w-full max-w-[1200px] mx-auto overflow-hidden gap-[var(--section-gap)] mb-[150px]">
         {/* Render Content based on Active Tab */}
         {activeTab === 'dashboard' && (
           <>
