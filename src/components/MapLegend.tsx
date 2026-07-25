@@ -54,7 +54,7 @@ export const MapLegend: React.FC<MapLegendProps> = ({
   return (
     <div className="relative">
       {open && (
-        <div className="absolute bottom-full left-0 mb-2 w-[240px] bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] shadow-[var(--shadow-sm)] p-4 flex flex-col gap-4 z-[1001]">
+        <div className="absolute bottom-full left-0 mb-2 w-[240px] max-h-[380px] overflow-y-auto bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] shadow-[var(--shadow-sm)] p-4 flex flex-col gap-4 z-[1001]">
           {showTraffic && (
             <Group title="Junctions">
               <Row><Swatch color="#059669" /><span>Clear — 42 km/h and above</span></Row>
@@ -104,7 +104,7 @@ export const MapLegend: React.FC<MapLegendProps> = ({
 
       <button
         onClick={() => setOpen(!open)}
-        className={`px-3 py-1.5 transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
+        className={`px-3 py-1.5 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
           open ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
         }`}
       >

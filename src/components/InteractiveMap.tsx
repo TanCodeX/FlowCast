@@ -616,7 +616,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  </MapContainer>
 
  {/* Layer Controls Bar */}
- <div className="absolute bottom-4 left-4 bg-[var(--color-card-snow)] border border-[var(--color-cloud)] p-1.5 flex items-center gap-2 text-[12px] z-[1000] shadow-[var(--shadow-sm)] rounded-[var(--radius-lg)] font-medium">
+ <div className="absolute bottom-4 left-4 right-4 w-fit max-w-[calc(100%-2rem)] bg-[var(--color-card-snow)] border border-[var(--color-cloud)] p-1.5 flex flex-wrap items-center gap-1.5 text-[12px] z-[1000] shadow-[var(--shadow-sm)] rounded-[var(--radius-lg)] font-medium">
  <div className="flex items-center gap-1 bg-[var(--color-paper-white)] px-2 py-1 border border-[var(--color-cloud)] rounded-[100px] text-[var(--color-ink-black)]">
  <span className="text-[10px] text-[var(--color-graphite)] uppercase ">Base Layer</span>
  <select
@@ -634,7 +634,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
  <button
  onClick={() => setShowTraffic(!showTraffic)}
- className={`px-3 py-1.5 transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
+ className={`px-3 py-1.5 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
  showTraffic ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
  }`}
  >
@@ -644,7 +644,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
  <button
  onClick={() => setShowWeather(!showWeather)}
- className={`px-3 py-1.5 transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
+ className={`px-3 py-1.5 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
  showWeather ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
  }`}
  >
@@ -654,7 +654,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
  <button
  onClick={() => setShowHeatmap(!showHeatmap)}
- className={`px-3 py-1.5 transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
+ className={`px-3 py-1.5 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
  showHeatmap ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
  }`}
  >
@@ -664,7 +664,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
  <button
  onClick={() => setShowIncidents(!showIncidents)}
- className={`px-3 py-1.5 transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
+ className={`px-3 py-1.5 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
  showIncidents ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
  }`}
  >
@@ -674,7 +674,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
  <button
  onClick={() => setShowAlternativeRoutes(!showAlternativeRoutes)}
- className={`px-3 py-1.5 transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
+ className={`px-3 py-1.5 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
  showAlternativeRoutes ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
  }`}
  >

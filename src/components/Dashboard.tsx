@@ -188,8 +188,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
       <div className="w-full grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-[var(--spacing-20)] items-start">
         
         {/* Left Area: Map (occupying ~70% of viewport width) */}
-        <div className="flex flex-col gap-[var(--element-gap)] min-h-[600px] min-w-0">
-          <div className="relative w-full flex-1 border border-[var(--color-cloud)] rounded-[var(--radius-cards)] shadow-[var(--shadow-subtle)] bg-[var(--color-card-snow)] overflow-hidden min-h-[500px]">
+        <div className="flex flex-col gap-[var(--element-gap)] min-w-0">
+          <div className="relative w-full h-[560px] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] shadow-[var(--shadow-subtle)] bg-[var(--color-card-snow)] overflow-hidden">
             <InteractiveMap
               nodes={nodes}
               incidents={incidents}
