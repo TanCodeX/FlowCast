@@ -11,13 +11,32 @@ import { AboutAI } from './components/AboutAI';
 import { Documentation } from './components/Documentation';
 import { DemoSimulationModal } from './components/DemoSimulationModal';
 import { Footer } from './components/Footer';
+import { IncidentsWorkspace } from './components/IncidentsWorkspace';
+import { ForecastWorkspace } from './components/ForecastWorkspace';
 import { useRouteSelection } from './hooks/useRouteSelection';
 import { AlertTriangle } from 'lucide-react';
 
+// TomTom returns 1000+ raw incidents for a city bbox — cap to the most severe
+// so the map stays readable and the calm design isn't buried in circles.
+const SEV_RANK: Record<string, number> = { severe: 4, heavy: 3, moderate: 2, low: 1 };
+const capIncidents = (list: Incident[], n = 18): Incident[] =>
+  [...list].sort((a, b) => (SEV_RANK[b.severity] || 0) - (SEV_RANK[a.severity] || 0)).slice(0, n);
+
+// CITIES nodes carry only geometry; give them deterministic traffic status/speed
+// so City Metrics (avg speed, congestion split) compute real numbers, not NaN.
+const NODE_PROFILE = [
+  { status: 'severe' as const, avgSpeedKmh: 13, delayMinutes: 32 },
+  { status: 'heavy' as const, avgSpeedKmh: 21, delayMinutes: 20 },
+  { status: 'moderate' as const, avgSpeedKmh: 33, delayMinutes: 9 },
+  { status: 'clear' as const, avgSpeedKmh: 46, delayMinutes: 3 },
+];
+const enrichNodes = (cityNodes: any[]): TrafficNode[] =>
+  cityNodes.map((n, i) => ({ ...n, ...NODE_PROFILE[(n.name.length + i) % NODE_PROFILE.length] }));
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
+  const [activeTab, setActiveTab] = useState<NavTab>('landing');
   const [selectedCity, setSelectedCity] = useState<string>('delhi');
-  const [nodes, setNodes] = useState<TrafficNode[]>(CITIES.delhi.nodes);
+  const [nodes, setNodes] = useState<TrafficNode[]>(enrichNodes(CITIES.delhi.nodes));
   const [incidents, setIncidents] = useState<Incident[]>(INITIAL_INCIDENTS);
   const [socialSignals, setSocialSignals] = useState<SocialSignal[]>(INITIAL_SOCIAL_SIGNALS);
   const [demoModalOpen, setDemoModalOpen] = useState(false);
@@ -38,6 +57,56 @@ export default function App() {
     selectedRoute,
     availableRoutes,
   } = useRouteSelection(incidents);
+
+  // AI Forecast States
+  const [forecastMinutes, setForecastMinutes] = useState<number>(30);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiLoadingStep, setAiLoadingStep] = useState<string>('');
+  const [aiReport, setAiReport] = useState<{
+    summary?: string;
+    criticalHotspots?: string[];
+    recommendedAction?: string;
+    confidenceScore?: number;
+  } | null>(null);
+
+  const handleFetchAiForecast = async () => {
+    setIsAiLoading(true);
+    setAiReport(null);
+    
+    const steps = [
+      "Analyzing social feed signals...",
+      "Corroborating GPS flow telemetry...",
+      "Calculating propagation cascade...",
+      "Generating final prediction report..."
+    ];
+
+    try {
+      const fetchPromise = fetch('/api/ai-forecast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          activeIncidents: incidents,
+          currentNodes: nodes,
+          timeHorizonMinutes: forecastMinutes,
+        }),
+      }).then(res => res.json());
+
+      for (const step of steps) {
+        setAiLoadingStep(step);
+        await new Promise(resolve => setTimeout(resolve, 400));
+      }
+
+      const data = await fetchPromise;
+      if (data.success) {
+        setAiReport(data);
+      }
+    } catch (err) {
+      console.error('Error fetching AI forecast:', err);
+    } finally {
+      setIsAiLoading(false);
+      setAiLoadingStep('');
+    }
+  };
 
   // Load live TomTom incidents on mount / city change
   React.useEffect(() => {
@@ -93,8 +162,10 @@ export default function App() {
               }
             ];
           }
+          const rawCount = finalIncidents.length;
+          finalIncidents = capIncidents(finalIncidents);
           setIncidents(finalIncidents);
-          
+
           const now = new Date();
           const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
           setDispatchLogs((prev) => [
@@ -102,7 +173,7 @@ export default function App() {
               id: `log-live-load-${Date.now()}`,
               time: timeStr,
               title: `Live Telemetry Loaded (${cityConfig.name})`,
-              details: `Synced ${finalIncidents.length} active incidents for ${cityConfig.name} via TomTom.`,
+              details: `Synced ${rawCount} live incidents; tracking top ${finalIncidents.length} hotspots for ${cityConfig.name} via TomTom.`,
               type: 'system'
             },
             ...prev
@@ -113,8 +184,8 @@ export default function App() {
       }
     };
     
-    // Set nodes for city
-    setNodes(CITIES[selectedCity].nodes);
+    // Set nodes for city (enriched with traffic status/speed for real metrics)
+    setNodes(enrichNodes(CITIES[selectedCity].nodes));
     // Reset selected route override/analysis on city change
     setActiveRouteAnalysis(null);
     setSelectedRouteIdOverride(null);
@@ -135,6 +206,7 @@ export default function App() {
           triggerToast(`✓ Synchronized. No new active incidents in ${cityConfig.name}.`);
           return;
         }
+        finalIncidents = capIncidents(finalIncidents);
         setIncidents(finalIncidents);
         
         const now = new Date();
@@ -528,14 +600,17 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-grow flex flex-col items-center justify-start py-8 px-4 md:px-8 w-full max-w-[1200px] mx-auto overflow-hidden gap-[var(--section-gap)] mb-[150px]">
+      <main className="flex-grow flex flex-col items-center justify-start py-8 px-4 md:px-8 w-full max-w-[1200px] mx-auto overflow-hidden gap-[var(--section-gap)] mb-40">
         {/* Render Content based on Active Tab */}
+        {activeTab === 'landing' && (
+          <HeroSection
+            onLaunchDemo={() => setActiveTab('dashboard')}
+            onExploreRoutePlanner={() => setActiveTab('planner')}
+          />
+        )}
+
         {activeTab === 'dashboard' && (
           <>
-            <HeroSection
-              onLaunchDemo={() => setDemoModalOpen(true)}
-              onExploreRoutePlanner={() => setActiveTab('route-planner')}
-            />
             <Dashboard
               nodes={nodes}
               incidents={incidents}
@@ -549,25 +624,37 @@ export default function App() {
               selectedIncident={selectedIncident}
               selectedRoute={activeRoute}
               availableRoutes={currentRoutes}
-              dispatchLogs={dispatchLogs}
-              onDeployRoute={handleDeployRoute}
  
               selectedCity={selectedCity}
               onSelectCity={setSelectedCity}
  
               onOpenDemoModal={() => setDemoModalOpen(true)}
-              onNavigateToRoutePlanner={() => setActiveTab('route-planner')}
+              onNavigateToIncidents={() => setActiveTab('incidents')}
+              onNavigateToPlanner={() => setActiveTab('planner')}
+              onNavigateToForecast={() => setActiveTab('forecast')}
               onTriggerFakeNews={handleTriggerFakeNews}
               activeRouteAnalysis={activeRouteAnalysis}
               onClearRouteAnalysis={() => setActiveRouteAnalysis(null)}
               onReloadIncidents={handleReloadLiveIncidents}
-              onReportHinglish={handleReportHinglish}
+              
+              forecastMinutes={forecastMinutes}
             />
-            <FeatureGrid />
           </>
         )}
 
-        {activeTab === 'route-planner' && (
+        {activeTab === 'incidents' && (
+          <IncidentsWorkspace
+            incidents={incidents}
+            selectedIncidentId={selectedIncidentId}
+            onSelectIncidentId={setSelectedIncidentId}
+            forecastMinutes={forecastMinutes}
+            onReloadIncidents={handleReloadLiveIncidents}
+            onReportHinglish={handleReportHinglish}
+            dispatchLogs={dispatchLogs}
+          />
+        )}
+
+        {activeTab === 'planner' && (
           <RoutePlanner
             activeRouteAnalysis={activeRouteAnalysis}
             setActiveRouteAnalysis={setActiveRouteAnalysis}
@@ -575,6 +662,17 @@ export default function App() {
             setLoading={setRouteAnalysisLoading}
             onNavigateToDashboard={() => setActiveTab('dashboard')}
             selectedCity={selectedCity}
+          />
+        )}
+
+        {activeTab === 'forecast' && (
+          <ForecastWorkspace
+            forecastMinutes={forecastMinutes}
+            setForecastMinutes={setForecastMinutes}
+            isAiLoading={isAiLoading}
+            aiLoadingStep={aiLoadingStep}
+            aiReport={aiReport}
+            handleFetchAiForecast={handleFetchAiForecast}
           />
         )}
 

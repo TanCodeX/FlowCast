@@ -4,108 +4,85 @@ import { IncidentCard } from './IncidentCard';
 import { ShieldAlert, RefreshCw } from 'lucide-react';
 
 interface IncidentDispatchProps {
-  incidents: Incident[];
-  selectedIncidentId: string | null;
-  onSelectIncident: (id: string) => void;
-  forecastMinutes: number;
-  onReloadIncidents?: () => void;
-  onReportHinglish?: (text: string) => Promise<void>;
+    incidents: Incident[];
+    selectedIncidentId: string | null;
+    onSelectIncident: (id: string) => void;
+    forecastMinutes: number;
+    onReloadIncidents?: () => void;
+    onReportHinglish?: (text: string) => Promise<void>;
 }
 
 export const IncidentDispatch: React.FC<IncidentDispatchProps> = ({
-  incidents,
-  selectedIncidentId,
-  onSelectIncident,
-  forecastMinutes,
-  onReloadIncidents,
-  onReportHinglish,
+    incidents,
+    selectedIncidentId,
+    onSelectIncident,
+    forecastMinutes,
+    onReloadIncidents,
 }) => {
-  const [hinglishText, setHinglishText] = React.useState('');
-  const [submitting, setSubmitting] = React.useState(false);
+    const [isExpanded, setIsExpanded] = React.useState(false);
 
-  return (
-    <div className="bg-[var(--color-card-snow)] border border-[var(--color-cloud)]/15 p-4 flex flex-col gap-3 shadow-sm select-none">
-      {/* Panel Header */}
-      <div className="flex items-center justify-between border-b border-[var(--color-cloud)]/15 pb-2">
-        <span className="text-xs font-bold uppercase tracking-wider text-[var(--color-ink-black)] font-serif flex items-center gap-1.5">
-          <ShieldAlert className="w-4 h-4 text-[#D93B2D]" />
-          <span>Incident Dispatch</span>
-        </span>
-        <div className="flex items-center gap-2">
-          {onReloadIncidents && (
-            <button
-              onClick={onReloadIncidents}
-              title="Sync Live Sensors"
-              className="p-1 border border-transparent hover:border-gray-200 text-gray-400 hover:text-[#D93B2D] cursor-pointer transition-colors bg-transparent"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
-          )}
-          <span className="text-[10px] text-white bg-[#D93B2D] px-2 py-0.5 font-mono font-bold">
-            ● CRITICAL
-          </span>
+    const severeIncidents = incidents.filter(inc => inc.severity === 'severe');
+    const displayIncidents = isExpanded ? incidents : (severeIncidents.length > 0 ? severeIncidents : incidents.slice(0, 2));
+    const hiddenCount = incidents.length - displayIncidents.length;
+
+    return (
+        <div className="bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] p-3 flex flex-col gap-2 shadow-[var(--shadow-subtle)] select-none flex-1 min-h-0">
+            {/* Panel Header */}
+            <div className="flex items-center justify-between border-b border-[var(--color-hairline)] pb-2">
+                <span className="text-[var(--text-caption)] font-semibold text-[var(--color-ink-black)] flex items-center gap-1.5 uppercase tracking-[var(--tracking-caption)]">
+                    <ShieldAlert className="w-4 h-4 text-[var(--color-ink-black)]" />
+                    <span>Incident Dispatch</span>
+                </span>
+                <div className="flex items-center gap-[var(--element-gap)]">
+                    {onReloadIncidents && (
+                        <button
+                            onClick={onReloadIncidents}
+                            title="Sync Live Sensors"
+                            className="p-1 border border-transparent hover:border-[var(--color-mist)] text-[var(--color-steel-gray)] hover:text-[var(--color-ink-black)] cursor-pointer transition-colors bg-transparent rounded-[var(--radius-buttons)]"
+                        >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+                    <span className="text-[var(--text-caption)] text-[var(--color-card-snow)] bg-[var(--color-ink-black)] px-2 py-0.5 font-bold tracking-[var(--tracking-caption)] uppercase rounded-[var(--radius-buttons)]">
+                        ● CRITICAL
+                    </span>
+                </div>
+            </div>
+
+            {/* Incident List */}
+            <div className="flex-1 space-y-2 overflow-y-auto pr-1">
+                {incidents.length === 0 ? (
+                    <div className="text-[var(--text-body)] text-[var(--color-steel-gray)] py-8 text-center bg-[var(--color-paper-white)] border border-[var(--color-mist)] rounded-[var(--radius-cards)]">
+                        No active incidents detected.
+                    </div>
+                ) : (
+                    displayIncidents.map((inc) => (
+                        <IncidentCard
+                            key={inc.id}
+                            incident={inc}
+                            isSelected={selectedIncidentId === inc.id}
+                            onSelect={() => onSelectIncident(inc.id)}
+                            forecastMinutes={forecastMinutes}
+                        />
+                    ))
+                )}
+                {hiddenCount > 0 && !isExpanded && (
+                    <button 
+                        onClick={() => setIsExpanded(true)}
+                        className="w-full text-center text-[10px] text-[var(--color-steel-gray)] hover:text-[var(--color-ink-black)] bg-[var(--color-paper-white)] py-1.5 rounded-[var(--radius-cards)] border border-dashed border-[var(--color-cloud)] transition-colors cursor-pointer"
+                    >
+                        + {hiddenCount} More Incidents
+                    </button>
+                )}
+                {isExpanded && hiddenCount > 0 && (
+                    <button 
+                        onClick={() => setIsExpanded(false)}
+                        className="w-full text-center text-[10px] text-[var(--color-steel-gray)] hover:text-[var(--color-ink-black)] bg-[var(--color-paper-white)] py-1.5 rounded-[var(--radius-cards)] border border-dashed border-[var(--color-cloud)] transition-colors cursor-pointer"
+                    >
+                        Show Less
+                    </button>
+                )}
+            </div>
         </div>
-      </div>
-
-      {/* Incident List */}
-      <div className="space-y-2.5 max-h-[280px] overflow-y-auto pr-1">
-        {incidents.length === 0 ? (
-          <div className="text-xs text-[var(--color-ink-black)]/50 font-mono py-8 text-center bg-gray-50 border border-dashed border-[var(--color-cloud)]/10">
-            No active incidents detected.
-          </div>
-        ) : (
-          incidents.map((inc) => (
-            <IncidentCard
-              key={inc.id}
-              incident={inc}
-              isSelected={selectedIncidentId === inc.id}
-              onSelect={() => onSelectIncident(inc.id)}
-              forecastMinutes={forecastMinutes}
-            />
-          ))
-        )}
-      </div>
-
-      {/* Hinglish Report Input */}
-      {onReportHinglish && (
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            if (!hinglishText.trim() || submitting) return;
-            setSubmitting(true);
-            try {
-              await onReportHinglish(hinglishText);
-              setHinglishText('');
-            } catch (err) {
-              console.error(err);
-            } finally {
-              setSubmitting(false);
-            }
-          }}
-          className="pt-2 border-t border-[var(--color-cloud)]/10 mt-1 flex flex-col gap-1.5"
-        >
-          <div className="text-[9px] font-mono font-bold text-emerald-800 uppercase tracking-wider">
-            💡 Hinglish AI Report Ingest
-          </div>
-          <div className="flex gap-1.5">
-            <input
-              type="text"
-              value={hinglishText}
-              onChange={(e) => setHinglishText(e.target.value)}
-              disabled={submitting}
-              placeholder="e.g. ito flyover par heavy jam lag gaya h"
-              className="flex-grow bg-[var(--color-paper-white)] text-[var(--color-ink-black)] border border-gray-300 px-2 py-1 text-[11px] font-sans outline-none focus:border-emerald-700 transition-colors"
-            />
-            <button
-              type="submit"
-              disabled={submitting}
-              className="bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-bold font-mono px-3 py-1 cursor-pointer border-none uppercase transition-colors shrink-0"
-            >
-              {submitting ? "..." : "Ingest"}
-            </button>
-          </div>
-        </form>
-      )}
-    </div>
-  );
+    );
 };

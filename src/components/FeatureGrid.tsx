@@ -4,8 +4,8 @@ export const FeatureGrid: React.FC = () => {
   return (
     <section id="features" className="w-full max-w-[1000px] mx-auto grid grid-cols-1 md:grid-cols-3 gap-16 md:gap-8 pt-16 pb-10">
       {/* Feature 1 */}
-      <div className="flex flex-col gap-2 relative">
-        <div className="text-[var(--color-signal-green)] font-['Caveat'] text-2xl absolute -top-10 left-0 transform -rotate-3">
+      <div className="flex flex-col gap-3 relative p-4 mt-8 md:mt-0">
+        <div className="text-[var(--color-signal-green)] font-['Caveat'] text-3xl w-fit mb-1">
           Instant
         </div>
         <h3 className="text-[var(--text-heading-sm)] font-medium text-[var(--color-ink-black)] leading-[var(--text-heading-sm--line-height)]">
@@ -17,8 +17,8 @@ export const FeatureGrid: React.FC = () => {
       </div>
 
       {/* Feature 2 */}
-      <div className="flex flex-col gap-2 relative">
-        <div className="text-[var(--color-signal-green)] font-['Caveat'] text-2xl absolute -top-10 left-0 transform -rotate-3">
+      <div className="flex flex-col gap-3 relative p-4 mt-8 md:mt-0">
+        <div className="text-[var(--color-signal-green)] font-['Caveat'] text-3xl w-fit mb-1">
           Predictive
         </div>
         <h3 className="text-[var(--text-heading-sm)] font-medium text-[var(--color-ink-black)] leading-[var(--text-heading-sm--line-height)]">
@@ -30,8 +30,8 @@ export const FeatureGrid: React.FC = () => {
       </div>
 
       {/* Feature 3 */}
-      <div className="flex flex-col gap-2 relative">
-        <div className="text-[var(--color-signal-green)] font-['Caveat'] text-2xl absolute -top-10 left-0 transform -rotate-3">
+      <div className="flex flex-col gap-3 relative p-4 mt-8 md:mt-0">
+        <div className="text-[var(--color-signal-green)] font-['Caveat'] text-3xl w-fit mb-1">
           Proactive
         </div>
         <h3 className="text-[var(--text-heading-sm)] font-medium text-[var(--color-ink-black)] leading-[var(--text-heading-sm--line-height)]">

@@ -1,20 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Incident, TrafficNode, CameraFeed, SocialSignal, RouteOption, DispatchLogEntry, RouteAnalysis } from '../types';
 import { InteractiveMap } from './InteractiveMap';
-import { IncidentDispatch } from './IncidentDispatch';
-import { RouteDetours } from './RouteDetours';
-import { DispatchLog } from './DispatchLog';
-import {
-  Clock,
-  Sparkles,
-  Camera,
-  Sliders,
-  Search
-} from 'lucide-react';
-import { radiusAt } from '../utils/radiusAt';
-import { isIncidentConfirmed, getIncidentConfidence } from '../utils/verification';
+import { Clock, Sparkles, AlertTriangle, ArrowRight, Activity, TrendingUp } from 'lucide-react';
 import { calculateEstimatedVehicles, calculateImpactRadiusSqKm, calculateStartsInMinutes } from '../utils/forecast';
-import { FEATURES } from '../constants/features';
+import { radiusAt } from '../utils/radiusAt';
+import { getIncidentConfidence, isIncidentConfirmed } from '../utils/verification';
 
 interface DashboardProps {
   nodes: TrafficNode[];
@@ -22,7 +12,6 @@ interface DashboardProps {
   cameras: CameraFeed[];
   socialSignals: SocialSignal[];
   
-  // Lifted selection states & hook data
   selectedIncidentId: string | null;
   onSelectIncidentId: (id: string) => void;
   selectedRouteId: string | null;
@@ -30,19 +19,20 @@ interface DashboardProps {
   selectedIncident: Incident | null;
   selectedRoute: RouteOption | null;
   availableRoutes: RouteOption[];
-  dispatchLogs: DispatchLogEntry[];
-  onDeployRoute: (route: RouteOption) => void;
-
+  
   selectedCity: string;
   onSelectCity: (city: string) => void;
 
   onOpenDemoModal: () => void;
-  onNavigateToRoutePlanner: () => void;
+  onNavigateToIncidents: () => void;
+  onNavigateToPlanner: () => void;
+  onNavigateToForecast: () => void;
   onTriggerFakeNews?: () => void;
   activeRouteAnalysis: RouteAnalysis | null;
   onClearRouteAnalysis: () => void;
   onReloadIncidents?: () => void;
-  onReportHinglish?: (text: string) => Promise<void>;
+  
+  forecastMinutes: number;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -58,27 +48,28 @@ export const Dashboard: React.FC<DashboardProps> = ({
   selectedIncident,
   selectedRoute,
   availableRoutes,
-  dispatchLogs,
-  onDeployRoute,
-
+  
   selectedCity,
   onSelectCity,
 
   onOpenDemoModal,
-  onNavigateToRoutePlanner,
+  onNavigateToIncidents,
+  onNavigateToPlanner,
+  onNavigateToForecast,
   onTriggerFakeNews,
   activeRouteAnalysis,
   onClearRouteAnalysis,
   onReloadIncidents,
-  onReportHinglish,
+  
+  forecastMinutes,
 }) => {
-  const [forecastMinutes, setForecastMinutes] = useState<number>(30);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>('node-cp');
-  const [activeCameraModal, setActiveCameraModal] = useState<CameraFeed | null>(null);
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [aiLoadingStep, setAiLoadingStep] = useState<string>('');
-  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
   const [currentTime, setCurrentTime] = useState('');
+  const [isFullScreenMapOpen, setIsFullScreenMapOpen] = useState(false);
+
+  useEffect(() => {
+    if (selectedIncidentId) setIsFullScreenMapOpen(true);
+  }, [selectedIncidentId]);
 
   useEffect(() => {
     const updateTime = () => {
@@ -89,12 +80,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const int = setInterval(updateTime, 60000);
     return () => clearInterval(int);
   }, []);
-  const [aiReport, setAiReport] = useState<{
-    summary?: string;
-    criticalHotspots?: string[];
-    recommendedAction?: string;
-    confidenceScore?: number;
-  } | null>(null);
 
   // Dynamic metrics calculations
   const clearCount = nodes.filter(n => n.status === 'clear' || n.status === 'moderate').length;
@@ -110,169 +95,198 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const speedDiff = (avgSpeed - 35.6).toFixed(1);
   const isSpeedBetter = parseFloat(speedDiff) >= 0;
   const speedDiffText = isSpeedBetter ? `+${speedDiff} km/h vs avg` : `${speedDiff} km/h vs avg`;
-  const speedDiffColor = isSpeedBetter ? 'text-emerald-700' : 'text-[#D93B2D]';
+  const speedDiffColor = isSpeedBetter ? 'text-[var(--color-steel-gray)]' : 'text-[var(--color-ink-black)]';
 
   const totalIncidents = incidents.length;
   const severeIncidentsCount = incidents.filter(inc => inc.severity === 'severe').length;
   const deviationPct = Math.round((heavyCount / totalNodes) * 45);
 
-  useEffect(() => {
-    fetch('/api/health')
-      .then(res => res.json())
-      .then(data => setHasApiKey(data.hasApiKey))
-      .catch(() => setHasApiKey(false));
-  }, []);
-
-  const handleFetchAiForecast = async () => {
-    if (!FEATURES.aiForecast) return;
-    setIsAiLoading(true);
-    setAiReport(null);
-    
-    const steps = [
-      "Analyzing social feed signals...",
-      "Corroborating GPS flow telemetry...",
-      "Calculating propagation cascade...",
-      "Generating final prediction report..."
-    ];
-
-    try {
-      const fetchPromise = fetch('/api/ai-forecast', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          activeIncidents: incidents,
-          currentNodes: nodes,
-          timeHorizonMinutes: forecastMinutes,
-        }),
-      }).then(res => res.json());
-
-      for (const step of steps) {
-        setAiLoadingStep(step);
-        await new Promise(resolve => setTimeout(resolve, 400));
-      }
-
-      const data = await fetchPromise;
-      if (data.success) {
-        setAiReport(data);
-      }
-    } catch (err) {
-      console.error('Error fetching AI forecast:', err);
-    } finally {
-      setIsAiLoading(false);
-      setAiLoadingStep('');
-    }
-  };
+  const topIncidents = incidents.slice(0, 3);
 
   return (
-    <div className="w-full max-w-[1440px] mx-auto flex flex-col gap-8 animate-zoom-in">
-      {/* Editorial Frame Container */}
-      <div className="relative w-full border border-[var(--color-cloud)]/15 bg-[var(--color-paper-white)] p-3 md:p-6 shadow-sm transition-all duration-300">
-        {/* Editorial Top Window Bar */}
-        <div className="flex items-center justify-between pb-4 px-2 border-b border-[var(--color-cloud)]/15 mb-5 font-mono">
-          <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 bg-[#D93B2D]" />
-            <div className="w-2.5 h-2.5 bg-[var(--color-ink-black)]" />
-            <div className="w-2.5 h-2.5 bg-[var(--color-ink-black)]/30" />
-            <span className="text-xs font-bold text-[var(--color-ink-black)] ml-2 hidden sm:inline-block tracking-wider uppercase">
-              FLOWCAST // COMMAND CENTER V0.1
-            </span>
+    <div className="w-full max-w-[1400px] mx-auto flex flex-col items-center gap-6 animate-zoom-in relative mb-12">
+      {/* Title block */}
+      <div className="w-full text-left relative mt-6 z-10 px-4 md:px-0 flex justify-between items-end">
+        <div>
+          <h2 className="text-[32px] font-medium text-[var(--color-ink-black)] leading-tight">
+            Command Center Overview
+          </h2>
+          <p className="text-[14px] text-[var(--color-steel-gray)] mt-2">
+            High-level monitoring of the grid. Dive into workspaces for full operational control.
+          </p>
+        </div>
+        <div className="flex items-center gap-4 text-sm text-[var(--color-ink-black)]/70">
+          <span className="hidden md:flex items-center gap-1.5 text-[var(--color-ink-black)] bg-[var(--color-ink-black)]/10 px-3 py-1 font-bold rounded-md border border-[var(--color-cloud)]">
+            <span className="w-2 h-2 rounded-full bg-[var(--color-signal-green)] animate-pulse" />
+            SYSTEM OPERATIONAL
+          </span>
+          <div className="flex items-center gap-1.5 font-bold text-[var(--color-ink-black)]">
+            <Clock className="w-4 h-4" />
+            <span>{currentTime}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Layout Grid: ~70% map, ~30% summary cards */}
+      <div className="w-full grid grid-cols-1 lg:grid-cols-[2.5fr_1fr] gap-[var(--section-gap)]">
+        
+        {/* Left Area: Map (occupying ~70% of viewport width) */}
+        <div className="flex flex-col gap-[var(--element-gap)] min-h-[600px]">
+          <div className="relative w-full flex-1 border border-[var(--color-cloud)] rounded-[var(--radius-cards)] shadow-[var(--shadow-subtle)] bg-[var(--color-card-snow)] overflow-hidden min-h-[500px]">
+            <InteractiveMap
+              nodes={nodes}
+              incidents={incidents}
+              selectedIncident={selectedIncident}
+              onSelectIncident={onSelectIncidentId}
+              selectedNodeId={selectedNodeId}
+              onSelectNode={setSelectedNodeId}
+              forecastMinutesAhead={forecastMinutes}
+              detourPositions={selectedRoute?.polylinePositions}
+              selectedRouteIsAiRecommended={selectedRoute?.isAiRecommended}
+              selectedCity={selectedCity}
+            />
           </div>
 
-          <div className="flex items-center gap-4 text-xs text-[var(--color-ink-black)]/70">
-            <span className="hidden md:flex items-center gap-1.5 text-[#D93B2D] bg-[#D93B2D]/10 border border-[#D93B2D]/30 px-2.5 py-0.5 font-bold uppercase tracking-wider">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#D93B2D] animate-ping" />
-              SYSTEM OPERATIONAL
-            </span>
-            <div className="flex items-center gap-1 font-bold text-[var(--color-ink-black)]">
-              <Clock className="w-3.5 h-3.5" />
-              <span>{currentTime}</span>
+          {/* Social Telemetry Strip under Map */}
+          <div className="flex flex-col sm:flex-row items-center gap-4 bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] p-4 shadow-[var(--shadow-subtle)]">
+            <div className="flex items-center gap-2 text-xs font-bold text-[var(--color-ink-black)] uppercase whitespace-nowrap shrink-0">
+              <Activity className="w-4 h-4 text-[var(--color-ink-black)]" />
+              <span>AI Social Telemetry:</span>
+            </div>
+            <div className="flex-grow overflow-hidden relative w-full text-sm text-[var(--color-ink-black)] font-sans">
+              <div className="flex items-center gap-4 truncate">
+                <span className="bg-[var(--color-ink-black)] text-white px-2 py-0.5 text-[10px] font-bold rounded shrink-0">
+                  {socialSignals[0].platform} ({socialSignals[0].timeAgo})
+                </span>
+                <span className="truncate text-[var(--color-body-charcoal)]">{socialSignals[0].text}</span>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* API Keyless Warning Banner */}
-        {hasApiKey === false && (
-          <div className="bg-[#D97706]/10 border border-[#D97706]/30 text-[#D97706] p-3 text-xs font-mono mb-5 flex items-center justify-between animate-fade-up">
-            <span className="font-semibold">⚠️ GROQ_API_KEY missing. FlowCast is running on a deterministic fallback prediction model.</span>
-            <span className="bg-[#D97706] text-white px-2.5 py-0.5 text-[9px] font-bold tracking-wider">FALLBACK MODE</span>
-          </div>
-        )}
-
-        {/* Command Center Main Layout Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-          {/* Left Panel: Live Traffic Metrics */}
-          <div className="lg:col-span-3 bg-[var(--color-card-snow)] border border-[var(--color-cloud)]/15 p-5 flex flex-col gap-5 shadow-sm">
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold font-mono tracking-widest text-[#D93B2D] uppercase">City Metrics</span>
-                <span className="text-[10px] bg-[var(--color-ink-black)] text-white font-mono font-bold px-2 py-0.5 uppercase tracking-wider">
-                  LIVE TELEMETRY
-                </span>
-              </div>
-              <div className="text-3xl font-serif font-black text-[var(--color-ink-black)] mt-1">54,312</div>
-              <div className="text-xs text-[var(--color-ink-black)]/60 font-sans">Active Commuters Monitored</div>
+        {/* Right Area: Summary Cards linking to Workspaces */}
+        <div className="flex flex-col gap-[var(--element-gap)] h-full">
+          
+          {/* City Metrics Card */}
+          <div className="bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] p-5 shadow-[var(--shadow-subtle)]">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-sm font-bold text-[var(--color-ink-black)] uppercase">City Metrics</span>
+              <span className="text-[10px] bg-[var(--color-ink-black)] text-white font-bold px-2 py-0.5 rounded">
+                LIVE TELEMETRY
+              </span>
             </div>
+            <div className="text-4xl font-black text-[var(--color-ink-black)] tracking-tight">54,312</div>
+            <div className="text-xs text-[var(--color-ink-black)]/60 font-sans mt-1">Active Commuters Monitored</div>
 
-            {/* Congestion Split Progress Bar */}
-            <div className="space-y-2 pt-1 border-t border-[var(--color-cloud)]/10">
-              <div className="flex justify-between text-xs font-mono font-bold">
+            <div className="space-y-2 pt-4 border-t border-[var(--color-cloud)]/40 mt-4">
+              <div className="flex justify-between text-xs font-bold">
                 <span className="text-[var(--color-ink-black)]">Mod: {modPct}%</span>
-                <span className="text-emerald-700">Clear: {clearPct}%</span>
-                <span className="text-[#D93B2D]">Heavy: {heavyPct}%</span>
+                <span className="text-[var(--color-steel-gray)]">Clear: {clearPct}%</span>
+                <span className="text-[var(--color-ink-black)]">Heavy: {heavyPct}%</span>
               </div>
-              <div className="h-2 w-full bg-[var(--color-ink-black)]/10 overflow-hidden flex">
-                <div className="bg-[var(--color-ink-black)] h-full" style={{ width: `${modPct}%` }} />
-                <div className="bg-emerald-600 h-full" style={{ width: `${clearPct}%` }} />
-                <div className="bg-[#D93B2D] h-full" style={{ width: `${heavyPct}%` }} />
-              </div>
-            </div>
-
-            {/* Metrics Breakdown Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-              <div className="bg-[var(--color-paper-white)] p-3 border border-[var(--color-cloud)]/10">
-                <div className="text-[10px] text-[var(--color-ink-black)]/60 font-mono font-bold uppercase tracking-wider">Avg Speed</div>
-                <div className="text-xl font-serif font-bold text-[var(--color-ink-black)] mt-0.5">{avgSpeed} km/h</div>
-                <div className={`text-[10px] ${speedDiffColor} font-mono mt-1 font-semibold`}>
-                  {speedDiffText}
-                </div>
-              </div>
-
-              <div className="bg-[var(--color-paper-white)] p-3 border border-[var(--color-cloud)]/10">
-                <div className="text-[10px] text-[var(--color-ink-black)]/60 font-mono font-bold uppercase tracking-wider">Deviation</div>
-                <div className="text-xl font-serif font-bold text-[#D93B2D] mt-0.5">+{deviationPct}%</div>
-                <div className="text-[10px] text-[#D93B2D]/80 font-mono mt-1 font-semibold">Peak hour delay</div>
-              </div>
-
-              <div className="bg-[var(--color-paper-white)] p-3 border border-[var(--color-cloud)]/10">
-                <div className="text-[10px] text-[var(--color-ink-black)]/60 font-mono font-bold uppercase tracking-wider">Incidents</div>
-                <div className="text-xl font-serif font-bold text-[#D93B2D] mt-0.5">{totalIncidents} Active</div>
-                <div className="text-[10px] text-[#D93B2D]/80 font-mono mt-1 font-semibold">{severeIncidentsCount} High Severity</div>
-              </div>
-
-              <div className="bg-[var(--color-paper-white)] p-3 border border-[var(--color-cloud)]/10">
-                <div className="text-[10px] text-[var(--color-ink-black)]/60 font-mono font-bold uppercase tracking-wider">ANPR Cams</div>
-                <div className="text-xl font-serif font-bold text-[var(--color-ink-black)] mt-0.5">642/650</div>
-                <div className="text-[10px] text-emerald-700 font-mono mt-1 font-semibold">98.7% Online</div>
+              <div className="h-2 w-full bg-[var(--color-ink-black)]/10 rounded-full overflow-hidden flex">
+                <div className="bg-[var(--color-ink-black)] h-full transition-all" style={{ width: `${modPct}%` }} />
+                <div className="bg-[var(--color-mist)] h-full transition-all" style={{ width: `${clearPct}%` }} />
+                <div className="bg-[var(--color-ink-black)] h-full transition-all opacity-80" style={{ width: `${heavyPct}%` }} />
               </div>
             </div>
-
+            <div className="grid grid-cols-2 gap-3 pt-4 border-t border-[var(--color-cloud)]/40 mt-4">
+               <div>
+                  <div className="text-[11px] text-[var(--color-ink-black)]/60 font-bold uppercase">Avg Speed</div>
+                  <div className="text-xl font-bold text-[var(--color-ink-black)] mt-1">{avgSpeed} km/h</div>
+               </div>
+               <div>
+                  <div className="text-[11px] text-[var(--color-ink-black)]/60 font-bold uppercase">Deviation</div>
+                  <div className="text-xl font-bold text-[var(--color-ink-black)] mt-1">+{deviationPct}%</div>
+               </div>
+            </div>
           </div>
 
-          {/* Center Map View & Live Floating Prediction Overlay */}
-          <div className="lg:col-span-6 flex flex-col gap-4">
-            {activeRouteAnalysis && (
-              <div className="bg-emerald-700/10 border border-emerald-600/30 text-emerald-800 p-3 text-xs font-mono flex items-center justify-between animate-fade-up">
-                <span className="font-semibold">📍 Live GPS Route Analysis active: Standard vs AI Bypass Detour.</span>
-                <button
-                  onClick={onClearRouteAnalysis}
-                  className="bg-emerald-700 hover:bg-emerald-800 text-white px-2.5 py-1 text-[10px] font-bold font-mono tracking-wider cursor-pointer border-none uppercase"
-                >
-                  Reset Map ✕
-                </button>
+          {/* Incidents Summary Card */}
+          <div className="bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] p-5 shadow-[var(--shadow-subtle)] flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2 text-sm font-bold text-[var(--color-ink-black)] uppercase">
+                <AlertTriangle className="w-4 h-4 text-[#D93B2D]" />
+                <span>Top Incidents ({totalIncidents})</span>
               </div>
-            )}
-            <div className="relative w-full border border-[var(--color-cloud)]/20 shadow-sm bg-[var(--color-paper-white)] overflow-hidden">
-              {/* Interactive Vector Map Canvas */}
+            </div>
+            <div className="flex flex-col gap-3">
+              {topIncidents.map(inc => (
+                <div key={inc.id} className="text-sm border-l-2 border-[#D93B2D] pl-3 py-1 flex justify-between items-center">
+                  <div className="flex flex-col truncate pr-2">
+                    <span className="font-semibold text-[var(--color-ink-black)] truncate">{inc.title}</span>
+                    <span className="text-xs text-[var(--color-steel-gray)] truncate">{inc.area}</span>
+                  </div>
+                  <span className="text-xs font-bold whitespace-nowrap bg-[var(--color-cloud)] px-2 py-1 rounded">+{inc.delayMinutes}m</span>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={onNavigateToIncidents}
+              className="mt-5 w-full bg-[var(--color-paper-white)] hover:bg-[var(--color-cloud)] border border-[var(--color-cloud)] text-[var(--color-ink-black)] px-4 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-2 rounded-lg cursor-pointer"
+            >
+              Manage Incidents Workspace <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Planner Summary Card */}
+          <div className="bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] p-5 shadow-[var(--shadow-subtle)]">
+            <div className="flex items-center gap-2 text-sm font-bold text-[var(--color-ink-black)] uppercase mb-2">
+              <Sparkles className="w-4 h-4" />
+              <span>AI Route Planner</span>
+            </div>
+            <p className="text-sm text-[var(--color-steel-gray)] mb-4">
+              {availableRoutes.length > 0 
+                ? `Ready to deploy ${availableRoutes.length} AI optimized detour options to fleet.` 
+                : "No active deployments. Planner ready for analysis."}
+            </p>
+            <button
+              onClick={onNavigateToPlanner}
+              className="w-full bg-[var(--color-paper-white)] hover:bg-[var(--color-cloud)] border border-[var(--color-cloud)] text-[var(--color-ink-black)] px-4 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-2 rounded-lg cursor-pointer"
+            >
+              Open Planner Workspace <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+          
+          {/* Forecast Summary Card */}
+          <div className="bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] p-5 shadow-[var(--shadow-subtle)]">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 text-sm font-bold text-[var(--color-ink-black)] uppercase">
+                <TrendingUp className="w-4 h-4" />
+                <span>Forecast Snapshot</span>
+              </div>
+            </div>
+            <p className="text-sm text-[var(--color-steel-gray)] mb-4 leading-relaxed">
+               {forecastMinutes > 0 ? `Currently simulating +${forecastMinutes} minutes ahead.` : "Run Llama 3.3 70B simulation to predict disruption cascading effects."}
+            </p>
+            <button
+              onClick={onNavigateToForecast}
+              className="w-full bg-[var(--color-paper-white)] hover:bg-[var(--color-cloud)] border border-[var(--color-cloud)] text-[var(--color-ink-black)] px-4 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-2 rounded-lg cursor-pointer"
+            >
+              Open Forecast Workspace <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+
+        </div>
+      </div>
+      
+      {/* Full-Screen Map Modal logic remains for specific incident focus if needed */}
+      {isFullScreenMapOpen && selectedIncident && (
+        <div className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-4 sm:p-6 lg:p-8 backdrop-blur-sm animate-zoom-in">
+          <div className="w-full h-full max-w-[1600px] bg-[var(--color-paper-white)] rounded-[30px] overflow-hidden shadow-2xl relative flex flex-col border border-[var(--color-cloud)]">
+            <div className="bg-[var(--color-card-snow)] px-6 py-4 border-b border-[var(--color-cloud)] flex items-center justify-between z-[1001] shrink-0">
+              <div className="flex items-center gap-3">
+                <span className="w-2.5 h-2.5 bg-[var(--color-signal-green)] rounded-full animate-pulse-badge" />
+                <h2 className="text-lg font-bold text-[var(--color-ink-black)] tracking-tight">Full Grid View</h2>
+              </div>
+              <button 
+                onClick={() => setIsFullScreenMapOpen(false)}
+                className="bg-[var(--color-cloud)] hover:bg-[var(--color-mist)] text-[var(--color-ink-black)] px-4 py-2 rounded-full text-xs font-bold transition-colors cursor-pointer border-none"
+              >
+                Close View ✕
+              </button>
+            </div>
+            <div className="flex-1 relative w-full h-full overflow-hidden [&>div]:h-full [&>div]:aspect-auto">
               <InteractiveMap
                 nodes={nodes}
                 incidents={incidents}
@@ -285,242 +299,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 selectedRouteIsAiRecommended={selectedRoute?.isAiRecommended}
                 selectedCity={selectedCity}
               />
-
-              {/* Editorial Floating Overlay Badge */}
-              <div className="absolute top-4 left-4 bg-[var(--color-card-snow)]/95 backdrop-blur-md border border-[var(--color-cloud)] p-4 w-[250px] md:w-[290px] shadow-xl flex flex-col gap-2 z-[1001] transition-all">
-                <div className="text-[11px] font-mono font-bold text-[#D93B2D] uppercase tracking-widest flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 bg-[#D93B2D] animate-pulse-badge" />
-                  <span>PREDICTIVE ALERT</span>
-                </div>
-                <div className="text-lg md:text-xl font-serif font-bold text-[var(--color-ink-black)] tracking-tight leading-tight">
-                  {selectedIncident ? selectedIncident.title : 'Severe Congestion'}
-                </div>
-                <div className="text-xs text-[var(--color-ink-black)]/80 flex items-center gap-1.5 font-medium font-sans">
-                  <Clock className="w-3.5 h-3.5 text-[#D93B2D]" />
-                  <span>
-                    {selectedIncident && calculateStartsInMinutes(selectedIncident.startsInMinutes, forecastMinutes) === 0 ? (
-                      <span className="text-[#D93B2D] font-mono font-bold uppercase tracking-wider">Disruption Active</span>
-                    ) : (
-                      <>
-                        Cascade starts in <span className="text-[#D93B2D] font-mono font-bold">{selectedIncident ? calculateStartsInMinutes(selectedIncident.startsInMinutes, forecastMinutes) : 24} mins</span>
-                      </>
-                    )}
-                  </span>
-                </div>
-                
-                {/* Verification status and metrics details */}
-                {selectedIncident && (
-                  <div className="text-[10px] font-mono text-[var(--color-ink-black)]/80 space-y-1 mt-1 pt-1 border-t border-gray-200">
-                    <div className="flex justify-between">
-                      <span>STATUS:</span>
-                      <span className={`font-bold ${isIncidentConfirmed(selectedIncident, socialSignals, nodes) ? 'text-[#D93B2D]' : 'text-[#D97706]'}`}>
-                        {isIncidentConfirmed(selectedIncident, socialSignals, nodes) ? 'CONFIRMED' : 'UNVERIFIED WARNING'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>IMPACT AREA:</span>
-                      <span className="text-emerald-700 font-bold">{calculateImpactRadiusSqKm(radiusAt(selectedIncident, forecastMinutes))} km²</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>EST. VEHICLES:</span>
-                      <span className="text-[var(--color-ink-black)] font-bold">{calculateEstimatedVehicles(selectedIncident.severity, selectedIncident.confidencePercent)}</span>
-                    </div>
+               {/* Modal info overlay */}
+               <div className="absolute top-4 left-4 z-[1001] w-[300px] md:w-[350px] bg-[var(--color-card-snow)]/95 backdrop-blur-md border border-[var(--color-cloud)] p-5 shadow-xl flex flex-col gap-3 rounded-xl transition-all">
+                  <div className="text-[11px] font-bold text-[var(--color-ink-black)] uppercase flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 bg-[var(--color-ink-black)]" />
+                    <span>PREDICTIVE ALERT</span>
                   </div>
-                )}
-
-                <div className="text-[10px] font-mono border-t border-[var(--color-cloud)]/10 pt-2 mt-0.5 flex justify-between">
-                  <span>Confidence: <span className="text-emerald-700 font-bold">{selectedIncident ? getIncidentConfidence(selectedIncident, socialSignals) : 94}%</span></span>
-                  <span className="truncate max-w-[120px]">{selectedIncident?.socialSource || 'Social Telemetry'}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Prediction Time Horizon Control Slider */}
-            <div className="bg-[var(--color-card-snow)] border border-[var(--color-cloud)]/15 p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-[var(--color-ink-black)] flex items-center justify-center text-white">
-                  <Sliders className="w-5 h-5" />
-                </div>
-                <div>
-                   <div className="text-xs font-bold font-mono uppercase text-[var(--color-ink-black)]">Forecast Horizon</div>
-                   <div className="text-[11px] text-[var(--color-ink-black)]/60 font-sans">Simulate cascading disruptions ahead of time</div>
-                </div>
-              </div>
-
-              {/* Native Range Slider */}
-              {FEATURES.horizon && (
-                <div className="flex flex-col gap-1 w-full max-w-[200px] sm:max-w-[220px] font-mono">
-                  <div className="flex justify-between text-[9px] font-bold text-[var(--color-ink-black)]/70">
-                    <span>NOW</span>
-                    <span>+15M</span>
-                    <span>+30M</span>
+                  <div className="text-lg md:text-xl font-bold text-[var(--color-ink-black)] tracking-tight leading-tight">
+                    {selectedIncident.title}
                   </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="30"
-                    step="15"
-                    value={forecastMinutes > 30 ? 30 : forecastMinutes}
-                    onChange={(e) => setForecastMinutes(Number(e.target.value))}
-                    className="w-full accent-[#D93B2D] cursor-pointer"
-                  />
-                </div>
-              )}
-
-              {/* Generate AI Report Button */}
-              {FEATURES.aiForecast && (
-                <button
-                  onClick={handleFetchAiForecast}
-                  disabled={isAiLoading}
-                  className="bg-[#D93B2D] hover:bg-[var(--color-ink-black)] text-white px-4 py-2 text-xs font-bold font-mono uppercase tracking-wider flex items-center gap-2 cursor-pointer transition-colors shadow-sm border-none"
-                >
-                  <Sparkles className={`w-4 h-4 text-white ${isAiLoading ? 'animate-spin' : ''}`} />
-                  <span>{isAiLoading ? 'Predicting...' : 'AI Forecast'}</span>
-                </button>
-              )}
-            </div>
-
-            {/* Simulated AI Loading Steps */}
-            {isAiLoading && (
-              <div className="bg-[var(--color-card-snow)] border border-[var(--color-cloud)]/10 p-4 shadow-sm flex items-center gap-3 font-mono text-xs text-[#D93B2D] animate-pulse">
-                <div className="w-4 h-4 rounded-full border-2 border-t-transparent border-[#D93B2D] animate-spin" />
-                <span>[AI ENGINE]: {aiLoadingStep}</span>
-              </div>
-            )}
-
-            {/* AI Real-time Report Banner if available */}
-            {aiReport && (
-              <div className="bg-[var(--color-card-snow)] border-2 border-[#D93B2D] p-5 flex flex-col gap-3 shadow-md animate-fade-up">
-                <div className="flex items-center justify-between text-xs font-bold text-[#D93B2D] font-mono">
-                  <span className="flex items-center gap-1.5 uppercase">
-                    <Sparkles className="w-4 h-4" />
-                    <span>Llama 3.3 70B Forecast (+{forecastMinutes} mins)</span>
-                  </span>
-                  <span className="bg-[#D93B2D] text-white px-2.5 py-0.5 text-[10px] font-bold">
-                    CONFIDENCE: {aiReport.confidenceScore || 94}%
-                  </span>
-                </div>
-                
-                <p className="text-xs text-[var(--color-ink-black)] leading-relaxed font-sans font-medium">{aiReport.summary}</p>
-                
-                {/* Metrics details on cause and start time */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-1 pt-1 border-t border-gray-200">
-                  <div className="bg-[var(--color-paper-white)] p-2 border border-gray-300/30">
-                    <div className="text-[9px] font-mono text-gray-500 uppercase">Primary Cause</div>
-                    <div className="text-xs font-bold font-serif text-[var(--color-ink-black)] mt-0.5">
-                      {selectedIncident ? selectedIncident.category.replace('_', ' ').toUpperCase() : 'CONGESTION'}
-                    </div>
+                  <div className="text-xs text-[var(--color-ink-black)]/80 flex items-center gap-1.5 font-medium font-sans">
+                    <Clock className="w-3.5 h-3.5 text-[var(--color-ink-black)]" />
+                    <span>
+                      {calculateStartsInMinutes(selectedIncident.startsInMinutes, forecastMinutes) === 0 ? (
+                        <span className="text-[var(--color-ink-black)] font-bold">Disruption Active</span>
+                      ) : (
+                        <>Cascade starts in <span className="text-[var(--color-ink-black)] font-bold">{calculateStartsInMinutes(selectedIncident.startsInMinutes, forecastMinutes)} mins</span></>
+                      )}
+                    </span>
                   </div>
-                  <div className="bg-[var(--color-paper-white)] p-2 border border-gray-300/30">
-                    <div className="text-[9px] font-mono text-gray-500 uppercase">Congestion Start</div>
-                    <div className="text-xs font-bold font-mono text-[#D93B2D] mt-0.5">
-                      {selectedIncident ? `In ${calculateStartsInMinutes(selectedIncident.startsInMinutes, forecastMinutes)} min` : 'Immediate'}
-                    </div>
-                  </div>
-                  <div className="bg-[var(--color-paper-white)] p-2 border border-gray-300/30 col-span-2 sm:col-span-1">
-                    <div className="text-[9px] font-mono text-gray-500 uppercase">Impact Footprint</div>
-                    <div className="text-xs font-bold font-mono text-emerald-700 mt-0.5">
-                      {selectedIncident ? `${calculateImpactRadiusSqKm(radiusAt(selectedIncident, forecastMinutes))} km²` : 'N/A'}
-                    </div>
-                  </div>
-                </div>
-
-                {aiReport.recommendedAction && (
-                  <div className="text-xs text-[var(--color-ink-black)] bg-[var(--color-paper-white)] p-3 border-l-4 border-[#D93B2D] mt-1 font-mono font-medium">
-                    💡 RECOMMENDED DETOUR: {aiReport.recommendedAction}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Right Panel: Dynamic Incident Dispatch, Route Detours & Dispatch Log */}
-          <div className="lg:col-span-3 flex flex-col gap-4">
-            <IncidentDispatch
-              incidents={incidents}
-              selectedIncidentId={selectedIncidentId}
-              onSelectIncident={onSelectIncidentId}
-              forecastMinutes={forecastMinutes}
-              onReloadIncidents={onReloadIncidents}
-              onReportHinglish={onReportHinglish}
-            />
-
-            <RouteDetours
-              routes={availableRoutes}
-              selectedRouteId={selectedRouteId}
-              onSelectRouteId={onSelectRouteId}
-              onDeployRoute={onDeployRoute}
-              onNavigateToRoutePlanner={onNavigateToRoutePlanner}
-            />
-
-            <DispatchLog logs={dispatchLogs} />
-          </div>
-        </div>
-
-        {/* Live Social Signal Feed Ticker */}
-        <div className="mt-5 pt-3 border-t border-[var(--color-cloud)]/15 flex flex-col sm:flex-row items-center gap-3 bg-[var(--color-card-snow)] border border-[var(--color-cloud)]/15 p-3 shadow-sm">
-          <div className="flex items-center gap-2 text-xs font-bold text-[#D93B2D] font-mono uppercase whitespace-nowrap">
-            <Clock className="w-4 h-4 text-[#D93B2D] animate-pulse" />
-            <span>AI SOCIAL TELEMETRY:</span>
-          </div>
-
-          <div className="flex-grow overflow-hidden relative w-full text-xs text-[var(--color-ink-black)] font-sans">
-            <div className="flex items-center gap-6 animate-fade-up">
-              <span className="bg-[var(--color-ink-black)] text-white px-2 py-0.5 text-[10px] font-mono font-bold">
-                {socialSignals[0].platform} ({socialSignals[0].timeAgo})
-              </span>
-              <span className="truncate max-w-[600px] text-[var(--color-ink-black)]/80">{socialSignals[0].text}</span>
-            </div>
-          </div>
-
-          <div className="flex gap-4">
-            <button
-              onClick={onOpenDemoModal}
-              className="text-xs font-bold font-mono text-[#D93B2D] hover:underline uppercase whitespace-nowrap cursor-pointer border-none bg-transparent"
-            >
-              Simulate Disruption →
-            </button>
-            {FEATURES.fakeNews && onTriggerFakeNews && (
-              <button
-                onClick={onTriggerFakeNews}
-                className="text-xs font-bold font-mono text-[#D97706] hover:underline uppercase whitespace-nowrap cursor-pointer border-none bg-transparent"
-              >
-                Inject Unverified Post ⚠️
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Camera Feed Modal */}
-      {activeCameraModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[var(--color-paper-white)] border border-[var(--color-cloud)] max-w-lg w-full p-6 flex flex-col gap-4 shadow-2xl animate-zoom-in">
-            <div className="flex items-center justify-between border-b border-[var(--color-cloud)]/20 pb-3">
-              <div>
-                <h3 className="font-serif font-bold text-xl text-[var(--color-ink-black)]">{activeCameraModal.junctionName}</h3>
-                <p className="text-xs text-[var(--color-ink-black)]/60 font-mono">{activeCameraModal.location}</p>
-              </div>
-              <button
-                onClick={() => setActiveCameraModal(null)}
-                className="text-[var(--color-ink-black)] hover:bg-[var(--color-ink-black)] hover:text-white font-bold px-2 py-1 cursor-pointer transition-colors"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="relative overflow-hidden aspect-video border border-[var(--color-cloud)]">
-              <img src={activeCameraModal.snapshotUrl} alt="Camera view" className="w-full h-full object-cover" />
-              <div className="absolute top-2 left-2 bg-[#D93B2D] text-white px-2 py-1 text-[10px] font-mono font-bold">
-                ● LIVE FEED ({activeCameraModal.lastUpdated})
-              </div>
-              <div className="absolute bottom-2 right-2 bg-[var(--color-ink-black)] text-white px-2.5 py-1 text-xs font-mono">
-                Speed: {activeCameraModal.avgSpeed} km/h
-              </div>
-            </div>
-
-            <div className="text-xs text-[var(--color-ink-black)]/80 bg-[var(--color-card-snow)] p-3 border border-[var(--color-cloud)]/15 font-mono">
-              ANPR Optics #8402 detecting velocity drops, vehicle tailbacks, and lane queue formation.
+               </div>
             </div>
           </div>
         </div>
