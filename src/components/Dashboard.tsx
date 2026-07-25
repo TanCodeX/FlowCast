@@ -151,7 +151,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   return (
-    <div className="w-full max-w-[1400px] mx-auto flex flex-col items-center gap-6 animate-zoom-in relative mb-12">
+    <div className="w-full max-w-[var(--page-max-width)] mx-auto flex flex-col items-center gap-6 animate-zoom-in relative mb-12">
       {/* Title block */}
       <div className="w-full text-left relative mt-6 z-10 px-4 md:px-0 flex justify-between items-end">
         <div>
@@ -185,10 +185,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
       )}
 
       {/* Main Layout Grid: ~70% map, ~30% summary cards */}
-      <div className="w-full grid grid-cols-1 lg:grid-cols-[2.5fr_1fr] gap-[var(--section-gap)]">
+      <div className="w-full grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-[var(--spacing-20)] items-start">
         
         {/* Left Area: Map (occupying ~70% of viewport width) */}
-        <div className="flex flex-col gap-[var(--element-gap)] min-h-[600px]">
+        <div className="flex flex-col gap-[var(--element-gap)] min-h-[600px] min-w-0">
           <div className="relative w-full flex-1 border border-[var(--color-cloud)] rounded-[var(--radius-cards)] shadow-[var(--shadow-subtle)] bg-[var(--color-card-snow)] overflow-hidden min-h-[500px]">
             <InteractiveMap
               nodes={nodes}
@@ -226,7 +226,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
 
         {/* Right Area: Summary Cards linking to Workspaces */}
-        <div className="flex flex-col gap-[var(--element-gap)] h-full">
+        <div className="flex flex-col gap-[var(--element-gap)] min-w-0">
 
           {/* Inspector — what you last clicked on the map */}
           {inspectMode !== null && (

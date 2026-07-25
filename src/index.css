@@ -86,6 +86,8 @@
   --radius-product-mockup: 30px;
 
   /* Layout / density (design.md) */
+  --page-max-width: 1200px;
+  --section-gap: 80px;
   --card-padding: 20px;
   --element-gap: 10px;
   --tracking-caption: 0.036em;
