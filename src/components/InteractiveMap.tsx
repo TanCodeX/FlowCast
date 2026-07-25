@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TrafficNode, Incident } from '../types';
 import { AlertTriangle, Layers, Activity, CloudRain, Zap } from 'lucide-react';
-import { MapContainer, TileLayer, CircleMarker, Circle, Polyline, Popup, Tooltip, LayerGroup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, CircleMarker, Circle, Polyline, Popup, Tooltip, LayerGroup, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Circle as LeafletCircle } from 'leaflet';
+import { Circle as LeafletCircle, Map as LeafletMap } from 'leaflet';
 
 import { AnimatedIncidentCircle } from './AnimatedIncidentCircle';
 import { radiusAt, severityToColor } from '../utils/radiusAt';
@@ -11,6 +11,8 @@ import { isIncidentConfirmed } from '../utils/verification';
 import { DELHI_CENTER, DELHI_NCR_BOUNDS, DEFAULT_ZOOM, MIN_ZOOM, MAX_ZOOM, TILE_LAYER_URL, TRAFFIC_FLOW_TILE_URL } from '../constants/map';
 import { FEATURES } from '../constants/features';
 import { CITIES } from '../constants/cities';
+import { MapLegend } from './MapLegend';
+import { Viewport } from '../utils/viewport';
 
 interface WaterloggingHazard {
   name: string;
@@ -97,6 +99,8 @@ interface InteractiveMapProps {
  selectedCity: string;
  fillContainer?: boolean;
  userLocation?: { lat: number; lng: number; name?: string } | null;
+ selectedNode?: TrafficNode | null;
+ onViewportChange?: (viewport: Viewport) => void;
 }
 
 // Inner subcomponent to handle programmatic map viewport transitions
@@ -106,7 +110,8 @@ const MapController: React.FC<{
  center?: [number, number];
  userLocation?: { lat: number; lng: number; name?: string } | null;
  detourPositions?: [number, number][];
-}> = ({ selectedIncident, selectedCity, center, userLocation, detourPositions }) => {
+ selectedNode?: TrafficNode | null;
+}> = ({ selectedIncident, selectedCity, center, userLocation, detourPositions, selectedNode }) => {
  const map = useMap();
 
  useEffect(() => {
@@ -130,7 +135,16 @@ const MapController: React.FC<{
  duration: 1.2,
  });
  }
- }, [selectedIncident, userLocation, map]);
+ }, [selectedIncident?.id, userLocation?.lat, userLocation?.lng, map]);
+
+ useEffect(() => {
+ if (selectedNode) {
+ map.flyTo([selectedNode.lat, selectedNode.lng], 14, {
+ animate: true,
+ duration: 1.2,
+ });
+ }
+ }, [selectedNode?.id, map]);
 
  useEffect(() => {
  if (!selectedIncident && !userLocation && detourPositions && detourPositions.length > 1) {
@@ -142,6 +156,30 @@ const MapController: React.FC<{
  });
  }
  }, [detourPositions, selectedIncident, userLocation, map]);
+
+ return null;
+};
+
+// Reports the visible bounds up so the dashboard can describe what is on screen
+const MapViewportReporter: React.FC<{ onChange: (viewport: Viewport) => void }> = ({ onChange }) => {
+ const report = (map: LeafletMap) => {
+ const b = map.getBounds();
+ const c = map.getCenter();
+ onChange({
+ bounds: [[b.getSouth(), b.getWest()], [b.getNorth(), b.getEast()]],
+ zoom: map.getZoom(),
+ center: [c.lat, c.lng],
+ });
+ };
+
+ const map = useMapEvents({
+ moveend: () => report(map),
+ zoomend: () => report(map),
+ });
+
+ useEffect(() => {
+ report(map);
+ }, [map]);
 
  return null;
 };
@@ -173,6 +211,8 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  selectedCity,
  fillContainer = false,
  userLocation,
+ selectedNode,
+ onViewportChange,
 }) => {
  const [showHeatmap, setShowHeatmap] = useState(FEATURES.heatmap);
  const [showIncidents, setShowIncidents] = useState(true);
@@ -261,10 +301,14 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  center={CITIES[selectedCity].center}
  userLocation={userLocation}
  detourPositions={detourPositions}
+ selectedNode={selectedNode}
  />
 
  {/* Dynamic Resizer */}
  <MapResizer />
+
+ {/* Viewport Reporter */}
+ {onViewportChange && <MapViewportReporter onChange={onViewportChange} />}
 
 
  <TileLayer url={tileUrl} />
@@ -637,6 +681,15 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  <Zap className="w-3.5 h-3.5 text-[var(--color-signal-green)]" />
  <span>AI Detours</span>
  </button>
+
+ <MapLegend
+ showTraffic={showTraffic}
+ showWeather={showWeather}
+ showHeatmap={showHeatmap}
+ showIncidents={showIncidents}
+ showAlternativeRoutes={showAlternativeRoutes}
+ hasUserLocation={!!userLocation}
+ />
  </div>
 
  {/* GPS Fix Badge */}

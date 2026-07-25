@@ -3,6 +3,8 @@ import { Incident, TrafficNode, CameraFeed, SocialSignal, RouteOption, RouteAnal
 import { InteractiveMap } from './InteractiveMap';
 import { Clock, Sparkles, AlertTriangle, ArrowRight, Activity, TrendingUp } from 'lucide-react';
 import { calculateStartsInMinutes } from '../utils/forecast';
+import { InspectorPanel } from './InspectorPanel';
+import { Viewport, inBounds, summarizeNodes } from '../utils/viewport';
 
 interface DashboardProps {
   nodes: TrafficNode[];
@@ -68,9 +70,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [currentTime, setCurrentTime] = useState('');
   const [isFullScreenMapOpen, setIsFullScreenMapOpen] = useState(false);
 
-  useEffect(() => {
-    if (selectedIncidentId) setIsFullScreenMapOpen(true);
-  }, [selectedIncidentId]);
+  // What the inspector panel is showing, and what the map viewport currently covers
+  const [inspectMode, setInspectMode] = useState<'node' | 'incident' | null>(null);
+  const [viewport, setViewport] = useState<Viewport | null>(null);
+  const [metricsScope, setMetricsScope] = useState<'city' | 'view'>('city');
 
   useEffect(() => {
     const updateTime = () => {
@@ -111,24 +114,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
     ? Math.round(incidents.reduce((sum, inc) => sum + (inc.confidencePercent || 0), 0) / incidents.length)
     : 85;
 
-  const clearCount = nodes.filter(n => n.status === 'clear' || n.status === 'moderate').length;
-  const heavyCount = nodes.filter(n => n.status === 'severe').length;
-  const modCount = nodes.filter(n => n.status === 'heavy').length;
-  
-  const totalNodes = nodes.length || 1;
-  const clearPct = Math.round((clearCount / totalNodes) * 100);
-  const heavyPct = Math.round((heavyCount / totalNodes) * 100);
-  const modPct = 100 - clearPct - heavyPct;
+  // Scope: whole city, or only what the map viewport currently shows
+  const isViewScope = metricsScope === 'view' && viewport !== null;
+  const scopeNodes = React.useMemo(
+    () => (isViewScope ? nodes.filter(n => inBounds(n.lat, n.lng, viewport!.bounds)) : nodes),
+    [isViewScope, nodes, viewport]
+  );
+  const scopeIncidents = React.useMemo(
+    () => (isViewScope ? incidents.filter(inc => inBounds(inc.lat, inc.lng, viewport!.bounds)) : incidents),
+    [isViewScope, incidents, viewport]
+  );
 
-  const avgSpeed = Math.round(nodes.reduce((sum, n) => sum + n.avgSpeedKmh, 0) / totalNodes);
-  const speedDiff = (avgSpeed - 35.6).toFixed(1);
-  const isSpeedBetter = parseFloat(speedDiff) >= 0;
-  const speedDiffText = isSpeedBetter ? `+${speedDiff} km/h vs avg` : `${speedDiff} km/h vs avg`;
-  const speedDiffColor = isSpeedBetter ? 'text-[var(--color-steel-gray)]' : 'text-[var(--color-ink-black)]';
-
-  const totalIncidents = incidents.length;
-  const severeIncidentsCount = incidents.filter(inc => inc.severity === 'severe').length;
-  const deviationPct = Math.round((heavyCount / totalNodes) * 45);
+  const summary = React.useMemo(() => summarizeNodes(scopeNodes), [scopeNodes]);
+  const { avgSpeed, clearPct, modPct, heavyPct } = summary;
+  const totalIncidents = scopeIncidents.length;
+  const deviationPct = Math.round((heavyPct / 100) * 45);
 
   useEffect(() => {
     fetch('/api/health')
@@ -137,7 +137,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
       .catch(() => setHasApiKey(false));
   }, []);
 
-  const topIncidents = incidents.slice(0, 3);
+  const topIncidents = scopeIncidents.slice(0, 3);
+  const inspectedNode = React.useMemo(() => nodes.find(n => n.id === selectedNodeId) || null, [nodes, selectedNodeId]);
+
+  const handleSelectNode = (id: string) => {
+    setSelectedNodeId(id);
+    setInspectMode('node');
+  };
+
+  const handleSelectIncident = (id: string) => {
+    onSelectIncidentId(id);
+    setInspectMode('incident');
+  };
 
   return (
     <div className="w-full max-w-[1400px] mx-auto flex flex-col items-center gap-6 animate-zoom-in relative mb-12">
@@ -183,9 +194,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
               nodes={nodes}
               incidents={incidents}
               selectedIncident={selectedIncident}
-              onSelectIncident={onSelectIncidentId}
+              onSelectIncident={handleSelectIncident}
               selectedNodeId={selectedNodeId}
-              onSelectNode={setSelectedNodeId}
+              onSelectNode={handleSelectNode}
+              selectedNode={inspectMode === 'node' ? inspectedNode : null}
+              onViewportChange={setViewport}
               forecastMinutesAhead={forecastMinutes}
               detourPositions={selectedRoute?.polylinePositions}
               selectedRouteIsAiRecommended={selectedRoute?.isAiRecommended}
@@ -214,17 +227,49 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
         {/* Right Area: Summary Cards linking to Workspaces */}
         <div className="flex flex-col gap-[var(--element-gap)] h-full">
-          
+
+          {/* Inspector — what you last clicked on the map */}
+          {inspectMode !== null && (
+            <InspectorPanel
+              mode={inspectMode}
+              node={inspectedNode}
+              incident={selectedIncident}
+              incidents={incidents}
+              forecastMinutes={forecastMinutes}
+              onSelectIncident={handleSelectIncident}
+              onExpandMap={() => setIsFullScreenMapOpen(true)}
+              onClose={() => setInspectMode(null)}
+              onNavigateToIncidents={onNavigateToIncidents}
+            />
+          )}
+
           {/* City Metrics Card */}
           <div className="bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] p-5 shadow-[var(--shadow-subtle)]">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-sm font-bold text-[var(--color-ink-black)] uppercase">City Metrics</span>
-              <span className="text-[10px] bg-[var(--color-ink-black)] text-white font-bold px-2 py-0.5 rounded">
-                LIVE TELEMETRY
+            <div className="flex items-center justify-between mb-4 gap-2">
+              <span className="text-sm font-bold text-[var(--color-ink-black)] uppercase">
+                {isViewScope ? 'View Metrics' : 'City Metrics'}
               </span>
+              <div className="flex items-center gap-1 bg-[var(--color-paper-white)] p-1 rounded-[100px] border border-[var(--color-cloud)] shrink-0">
+                {(['city', 'view'] as const).map(scope => (
+                  <button
+                    key={scope}
+                    onClick={() => setMetricsScope(scope)}
+                    className={`px-3 py-0.5 text-[11px] font-medium rounded-[100px] transition-colors cursor-pointer border-none ${
+                      metricsScope === scope
+                        ? 'bg-[var(--color-ink-black)] text-white'
+                        : 'bg-transparent text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
+                    }`}
+                  >
+                    {scope === 'city' ? 'City' : 'In view'}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="text-4xl font-black text-[var(--color-ink-black)] tracking-tight">54,312</div>
-            <div className="text-xs text-[var(--color-ink-black)]/60 font-sans mt-1">Active Commuters Monitored</div>
+            <div className="text-4xl font-black text-[var(--color-ink-black)] tracking-tight">{activeCommuters}</div>
+            <div className="text-xs text-[var(--color-ink-black)]/60 font-sans mt-1">
+              Active Commuters Monitored · {summary.count} junction{summary.count === 1 ? '' : 's'}
+              {isViewScope ? ' in view' : ''}
+            </div>
 
             <div className="space-y-2 pt-4 border-t border-[var(--color-cloud)]/40 mt-4">
               <div className="flex justify-between text-xs font-bold">
@@ -248,80 +293,103 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <div className="text-xl font-bold text-[var(--color-ink-black)] mt-1">+{deviationPct}%</div>
                </div>
             </div>
+            {summary.worst && (
+              <div className="text-[11px] text-[var(--color-steel-gray)] mt-4 pt-4 border-t border-[var(--color-cloud)]/40 flex justify-between gap-2">
+                <span className="truncate">
+                  Worst: <span className="text-[var(--color-ink-black)] font-medium">{summary.worst.name}</span> ({summary.worst.avgSpeedKmh} km/h)
+                </span>
+                {isViewScope && viewport && (
+                  <span className="shrink-0">z{viewport.zoom.toFixed(1)} · {viewport.center[0].toFixed(3)}, {viewport.center[1].toFixed(3)}</span>
+                )}
+              </div>
+            )}
           </div>
 
 
-          {/* Incidents Summary Card */}
-          <div className="bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] p-5 shadow-[var(--shadow-subtle)] flex flex-col">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 text-sm font-bold text-[var(--color-ink-black)] uppercase">
-                <AlertTriangle className="w-4 h-4 text-[#D93B2D]" />
-                <span>Top Incidents ({totalIncidents})</span>
-              </div>
-            </div>
-            <div className="flex flex-col gap-3">
-              {topIncidents.map(inc => (
-                <div key={inc.id} className="text-sm border-l-2 border-[#D93B2D] pl-3 py-1 flex justify-between items-center">
-                  <div className="flex flex-col truncate pr-2">
-                    <span className="font-semibold text-[var(--color-ink-black)] truncate">{inc.title}</span>
-                    <span className="text-xs text-[var(--color-steel-gray)] truncate">{inc.area}</span>
-                  </div>
-                  <span className="text-xs font-bold whitespace-nowrap bg-[var(--color-cloud)] px-2 py-1 rounded">+{inc.delayMinutes}m</span>
+          {inspectMode === null && (
+            <>
+            {/* Incidents Summary Card */}
+            <div className="bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] p-5 shadow-[var(--shadow-subtle)] flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2 text-sm font-bold text-[var(--color-ink-black)] uppercase">
+                  <AlertTriangle className="w-4 h-4 text-[#D93B2D]" />
+                  <span>{isViewScope ? `In View (${totalIncidents})` : `Top Incidents (${totalIncidents})`}</span>
                 </div>
-              ))}
-
-            </div>
-            <button
-              onClick={onNavigateToIncidents}
-              className="mt-5 w-full bg-[var(--color-paper-white)] hover:bg-[var(--color-cloud)] border border-[var(--color-cloud)] text-[var(--color-ink-black)] px-4 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-2 rounded-lg cursor-pointer"
-            >
-              Manage Incidents Workspace <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Planner Summary Card */}
-          <div className="bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] p-5 shadow-[var(--shadow-subtle)]">
-            <div className="flex items-center gap-2 text-sm font-bold text-[var(--color-ink-black)] uppercase mb-2">
-              <Sparkles className="w-4 h-4" />
-              <span>AI Route Planner</span>
-            </div>
-            <p className="text-sm text-[var(--color-steel-gray)] mb-4">
-              {availableRoutes.length > 0 
-                ? `Ready to deploy ${availableRoutes.length} AI optimized detour options to fleet.` 
-                : "No active deployments. Planner ready for analysis."}
-            </p>
-            <button
-              onClick={onNavigateToPlanner}
-              className="w-full bg-[var(--color-paper-white)] hover:bg-[var(--color-cloud)] border border-[var(--color-cloud)] text-[var(--color-ink-black)] px-4 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-2 rounded-lg cursor-pointer"
-            >
-              Open Planner Workspace <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-          
-          {/* Forecast Summary Card */}
-          <div className="bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] p-5 shadow-[var(--shadow-subtle)]">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2 text-sm font-bold text-[var(--color-ink-black)] uppercase">
-                <TrendingUp className="w-4 h-4" />
-                <span>Forecast Snapshot</span>
               </div>
+              <div className="flex flex-col gap-3">
+                {topIncidents.length === 0 ? (
+                  <p className="text-sm text-[var(--color-steel-gray)]">
+                    {isViewScope ? 'No incidents in this view. Zoom out to widen the search.' : 'No active incidents detected.'}
+                  </p>
+                ) : (
+                  topIncidents.map(inc => (
+                    <button
+                      key={inc.id}
+                      onClick={() => handleSelectIncident(inc.id)}
+                      className="text-sm border-l-2 border-[#D93B2D] pl-3 py-1 flex justify-between items-center text-left bg-transparent border-y-0 border-r-0 cursor-pointer hover:bg-[var(--color-paper-white)] transition-colors w-full"
+                    >
+                      <span className="flex flex-col truncate pr-2">
+                        <span className="font-semibold text-[var(--color-ink-black)] truncate">{inc.title}</span>
+                        <span className="text-xs text-[var(--color-steel-gray)] truncate">{inc.area}</span>
+                      </span>
+                      <span className="text-xs font-bold whitespace-nowrap bg-[var(--color-cloud)] px-2 py-1 rounded">+{inc.delayMinutes}m</span>
+                    </button>
+                  ))
+                )}
+              </div>
+              <button
+                onClick={onNavigateToIncidents}
+                className="mt-5 w-full bg-[var(--color-paper-white)] hover:bg-[var(--color-cloud)] border border-[var(--color-cloud)] text-[var(--color-ink-black)] px-4 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-2 rounded-lg cursor-pointer"
+              >
+                Manage Incidents Workspace <ArrowRight className="w-4 h-4" />
+              </button>
             </div>
-            <p className="text-sm text-[var(--color-steel-gray)] mb-4 leading-relaxed">
-               {forecastMinutes > 0 ? `Currently simulating +${forecastMinutes} minutes ahead.` : "Run Llama 3.3 70B simulation to predict disruption cascading effects."}
-            </p>
-            <button
-              onClick={onNavigateToForecast}
-              className="w-full bg-[var(--color-paper-white)] hover:bg-[var(--color-cloud)] border border-[var(--color-cloud)] text-[var(--color-ink-black)] px-4 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-2 rounded-lg cursor-pointer"
-            >
-              Open Forecast Workspace <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
+
+            {/* Planner Summary Card */}
+            <div className="bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] p-5 shadow-[var(--shadow-subtle)]">
+              <div className="flex items-center gap-2 text-sm font-bold text-[var(--color-ink-black)] uppercase mb-2">
+                <Sparkles className="w-4 h-4" />
+                <span>AI Route Planner</span>
+              </div>
+              <p className="text-sm text-[var(--color-steel-gray)] mb-4">
+                {availableRoutes.length > 0 
+                  ? `Ready to deploy ${availableRoutes.length} AI optimized detour options to fleet.` 
+                  : "No active deployments. Planner ready for analysis."}
+              </p>
+              <button
+                onClick={onNavigateToPlanner}
+                className="w-full bg-[var(--color-paper-white)] hover:bg-[var(--color-cloud)] border border-[var(--color-cloud)] text-[var(--color-ink-black)] px-4 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-2 rounded-lg cursor-pointer"
+              >
+                Open Planner Workspace <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          
+            {/* Forecast Summary Card */}
+            <div className="bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] p-5 shadow-[var(--shadow-subtle)]">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 text-sm font-bold text-[var(--color-ink-black)] uppercase">
+                  <TrendingUp className="w-4 h-4" />
+                  <span>Forecast Snapshot</span>
+                </div>
+              </div>
+              <p className="text-sm text-[var(--color-steel-gray)] mb-4 leading-relaxed">
+                 {forecastMinutes > 0 ? `Currently simulating +${forecastMinutes} minutes ahead.` : "Run Llama 3.3 70B simulation to predict disruption cascading effects."}
+              </p>
+              <button
+                onClick={onNavigateToForecast}
+                className="w-full bg-[var(--color-paper-white)] hover:bg-[var(--color-cloud)] border border-[var(--color-cloud)] text-[var(--color-ink-black)] px-4 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-2 rounded-lg cursor-pointer"
+              >
+                Open Forecast Workspace <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+            </>
+          )}
 
         </div>
       </div>
       
-      {/* Full-Screen Map Modal logic remains for specific incident focus if needed */}
-      {isFullScreenMapOpen && selectedIncident && (
+      {/* Full-Screen Map Modal — opened from the inspector's expand button */}
+      {isFullScreenMapOpen && (
         <div className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-4 sm:p-6 lg:p-8 backdrop-blur-sm animate-zoom-in">
           <div className="w-full h-full max-w-[1600px] bg-[var(--color-paper-white)] rounded-[30px] overflow-hidden shadow-2xl relative flex flex-col border border-[var(--color-cloud)]">
             <div className="bg-[var(--color-card-snow)] px-6 py-4 border-b border-[var(--color-cloud)] flex items-center justify-between z-[1001] shrink-0">
@@ -341,9 +409,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 nodes={nodes}
                 incidents={incidents}
                 selectedIncident={selectedIncident}
-                onSelectIncident={onSelectIncidentId}
+                onSelectIncident={handleSelectIncident}
                 selectedNodeId={selectedNodeId}
-                onSelectNode={setSelectedNodeId}
+                onSelectNode={handleSelectNode}
+                selectedNode={inspectMode === 'node' ? inspectedNode : null}
                 forecastMinutesAhead={forecastMinutes}
                 detourPositions={selectedRoute?.polylinePositions}
                 selectedRouteIsAiRecommended={selectedRoute?.isAiRecommended}
@@ -351,6 +420,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 userLocation={userLocation}
               />
                {/* Modal info overlay */}
+               {selectedIncident && inspectMode === 'incident' && (
                <div className="absolute top-4 left-4 z-[1001] w-[300px] md:w-[350px] bg-[var(--color-card-snow)]/95 backdrop-blur-md border border-[var(--color-cloud)] p-5 shadow-xl flex flex-col gap-3 rounded-xl transition-all">
                   <div className="text-[11px] font-bold text-[var(--color-ink-black)] uppercase flex items-center gap-2">
                     <span className="w-2.5 h-2.5 bg-[var(--color-ink-black)]" />
@@ -370,6 +440,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </span>
                   </div>
                </div>
+               )}
             </div>
           </div>
         </div>
