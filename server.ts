@@ -187,9 +187,11 @@ app.get("/api/traffic-tile/:z/:x/:y", async (req, res) => {
   }
 
   try {
-    // relative-delay paints only roads that are slower than free flow, so a healthy
-    // network stays clean instead of drowning the basemap in green.
-    const url = `https://api.tomtom.com/traffic/map/4/tile/flow/relative-delay/${z}/${x}/${y}.png?tileSize=256&key=${tomtomKey}`;
+    // relative-delay colours *only* roads where speed is below free-flow — free-flowing
+    // roads are fully transparent so the basemap stays clean. This prevents the
+    // "everything is green" effect that reduced-sensitivity produces at city zoom.
+    const url = `https://api.tomtom.com/traffic/map/4/tile/flow/relative-delay/${z}/${x}/${y}.png` +
+      `?tileSize=256&thickness=7&key=${tomtomKey}`;
     const upstream = await fetch(url);
     if (!upstream.ok) return res.status(upstream.status).end();
 

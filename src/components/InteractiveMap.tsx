@@ -55,6 +55,10 @@ const STORM_CELLS: Record<string, { lat: number; lng: number; radius: number }[]
   ]
 };
 
+// relative-delay tiles are sparse (only delayed roads), so they are useful even at
+// city overview zoom — show them from zoom 11 onward.
+const TRAFFIC_MIN_ZOOM = 11;
+
 /** Samples a route and returns arrow anchors with a bearing, so direction of travel is readable. */
 function routeArrows(points: [number, number][]): { position: [number, number]; bearing: number }[] {
   if (points.length < 8) return [];
@@ -221,6 +225,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  const [showWeather, setShowWeather] = useState(true);
  const [currentTime, setCurrentTime] = useState('');
  const [layersOpen, setLayersOpen] = useState(false);
+ const [zoom, setZoom] = useState<number>(DEFAULT_ZOOM);
 
  const [mapEngine, setMapEngine] = useState<'leaflet' | 'maplibre' | 'openlayers' | 'google-road' | 'google-satellite'>('leaflet');
 
@@ -371,13 +376,20 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  <MapRefBridge onReady={handleMapReady} />
 
  {/* Viewport Reporter */}
- {onViewportChange && <MapViewportReporter onChange={onViewportChange} />}
+ <MapViewportReporter
+ onChange={(viewport) => {
+ setZoom(viewport.zoom);
+ onViewportChange?.(viewport);
+ }}
+ />
 
 
  <TileLayer url={tileUrl} />
 
  {/* Live TomTom traffic flow, drawn on the real road network */}
- {showTraffic && <TileLayer url={TRAFFIC_FLOW_TILE_URL} opacity={0.85} zIndex={10} />}
+ {showTraffic && zoom >= TRAFFIC_MIN_ZOOM && (
+ <TileLayer url={TRAFFIC_FLOW_TILE_URL} opacity={0.85} zIndex={10} />
+ )}
 
  {/* User Current Location Marker */}
  {userLocation && (
@@ -579,9 +591,10 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  radius={cell.radius}
  pathOptions={{
  fillColor: '#8B5CF6',
- fillOpacity: 0.16,
- color: '#6D28D9',
- weight: 1.5,
+ fillOpacity: 0.07,
+ color: '#8B5CF6',
+ weight: 1,
+ opacity: 0.5,
  dashArray: '3, 6'
  }}
  />
@@ -613,9 +626,10 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  radius={currentRadius}
  pathOptions={{
  color: color,
- weight: 2,
+ weight: 1.5,
+ opacity: 0.65,
  fillColor: color,
- fillOpacity: 0.22
+ fillOpacity: 0.12
  }}
  >
  <Tooltip direction="top" opacity={0.9} className="text-[10px] font-medium bg-[var(--color-ink-black)] text-white border-none px-2 py-0.5 shadow-[var(--shadow-sm)] rounded-[100px]">
@@ -683,7 +697,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  <div className="bg-[var(--color-card-snow)] border border-[var(--color-cloud)] p-1 flex items-center gap-1 text-[11px] shadow-[var(--shadow-sm)] rounded-[100px] font-medium">
  <button
  onClick={() => setShowTraffic(!showTraffic)}
- title="Live traffic flow"
+ title={zoom >= TRAFFIC_MIN_ZOOM ? 'Live traffic flow' : 'Live traffic flow — zoom in to show road colours'}
  className={`px-2.5 py-1 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
  showTraffic ? 'bg-[var(--color-ink-black)] text-white' : 'bg-transparent text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
  }`}

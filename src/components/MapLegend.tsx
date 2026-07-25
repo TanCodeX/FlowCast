@@ -70,7 +70,7 @@ export const MapLegend: React.FC<MapLayerFlags> = ({
             <Row><Line color="#eab308" /><span>Slower than usual</span></Row>
             <Row><Line color="#f97316" /><span>Heavy delay</span></Row>
             <Row><Line color="#ef4444" /><span>Queueing / standstill</span></Row>
-            <Row><span className="text-[11px] text-[var(--color-steel-gray)]">Only delayed roads are coloured — clear roads stay plain</span></Row>
+            <Row><span className="text-[11px] text-[var(--color-steel-gray)]">Shown from zoom 12; only meaningful delays are coloured</span></Row>
           </Group>
         )}
 
