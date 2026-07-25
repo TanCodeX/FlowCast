@@ -22,15 +22,23 @@ const SEV_RANK: Record<string, number> = { severe: 4, heavy: 3, moderate: 2, low
 const capIncidents = (list: Incident[], n = 18): Incident[] =>
   [...list].sort((a, b) => (SEV_RANK[b.severity] || 0) - (SEV_RANK[a.severity] || 0)).slice(0, n);
 
-// CITIES nodes carry only geometry; derive traffic status/speed so City Metrics
-// (avg speed, congestion split) compute real numbers, not NaN.
+// Stable hash of a node id — same node always seeds the same placeholder speed,
+// so the dashboard doesn't report different numbers on every reload.
+const seedFrom = (id: string): number => {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return h;
+};
+
+// CITIES nodes carry only geometry; derive a deterministic placeholder speed so
+// City Metrics render real numbers before live telemetry lands (never NaN).
 function mapCityNodesToTrafficNodes(nodesList: any[]): TrafficNode[] {
   return nodesList.map((node, index) => {
-    // Deterministically generate a realistic speed for each node based on its name/index
+    const seed = seedFrom(node.id || `${node.name}-${index}`);
     const isCongestedNode = node.name.includes("Bypass") || node.name.includes("Subway") || node.name.includes("Silk Board") || index % 3 === 0;
     const avgSpeedKmh = isCongestedNode
-      ? Math.floor(Math.random() * 15) + 12 // 12-27 km/h (heavy/severe)
-      : Math.floor(Math.random() * 25) + 38; // 38-63 km/h (clear/moderate)
+      ? 12 + (seed % 15) // 12-26 km/h (heavy/severe)
+      : 38 + (seed % 25); // 38-62 km/h (clear/moderate)
     
     let status: 'clear' | 'moderate' | 'heavy' | 'severe' = 'clear';
     if (avgSpeedKmh < 18) status = 'severe';

@@ -174,6 +174,120 @@ app.get("/api/live-incidents", async (req, res) => {
 });
 
 // Live Nodes Flow API
+// Proxies TomTom traffic-flow tiles so the browser gets real road-level congestion
+// without the API key ever reaching the client. Replaces the old fake straight-line
+// "road network" that drew segments through buildings.
+app.get("/api/traffic-tile/:z/:x/:y", async (req, res) => {
+  const tomtomKey = process.env.TOMTOM_API_KEY;
+  if (!tomtomKey) return res.status(404).end();
+
+  const { z, x, y } = req.params;
+  if (!/^\d{1,2}$/.test(z) || !/^\d{1,7}$/.test(x) || !/^\d{1,7}$/.test(y)) {
+    return res.status(400).end();
+  }
+
+  try {
+    const url = `https://api.tomtom.com/traffic/map/4/tile/flow/relative0/${z}/${x}/${y}.png?tileSize=256&key=${tomtomKey}`;
+    const upstream = await fetch(url);
+    if (!upstream.ok) return res.status(upstream.status).end();
+
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=60");
+    return res.send(Buffer.from(await upstream.arrayBuffer()));
+  } catch (err) {
+    console.warn("Traffic tile proxy failed:", err);
+    return res.status(502).end();
+  }
+});
+
+// Real road-following routes around a specific incident: a standard path straight
+// through the disruption, and a detour that routes around it. Both come from TomTom
+// Routing, so the geometry follows actual roads. No key or no answer => no geometry,
+// rather than an invented polyline.
+app.post("/api/incident-routes", async (req, res) => {
+  const { lat, lng, area, delayMinutes, cityId } = req.body || {};
+  if (typeof lat !== "number" || typeof lng !== "number") {
+    return res.status(400).json({ success: false, error: "lat and lng are required" });
+  }
+
+  const tomtomKey = process.env.TOMTOM_API_KEY;
+  if (!tomtomKey) {
+    return res.json({ success: false, error: "No routing key configured" });
+  }
+
+  const cacheKey = `incident-routes:${lat.toFixed(4)}:${lng.toFixed(4)}`;
+  const cached = backendCache.get<any>(cacheKey);
+  if (cached) return res.json(cached);
+
+  // Approach the incident along the city-centre axis so origin/destination sit on
+  // the corridor that actually feeds it, ~3 km either side.
+  const center = CITY_CENTERS[(cityId || "delhi").toLowerCase()] || CITY_CENTERS.delhi;
+  const dLat = lat - center[0];
+  const dLng = lng - center[1];
+  const norm = Math.hypot(dLat, dLng) || 1;
+  const spanKm = 3;
+  const latSpan = (spanKm / 111) * (dLat / norm);
+  const lngSpan = (spanKm / (111 * Math.cos((lat * Math.PI) / 180))) * (dLng / norm);
+
+  const origin: [number, number] = [lat - latSpan, lng - lngSpan];
+  const destination: [number, number] = [lat + latSpan, lng + lngSpan];
+
+  const routeUrl = (points: [number, number][]) =>
+    `https://api.tomtom.com/routing/1/calculateRoute/${points
+      .map((p) => `${p[0]},${p[1]}`)
+      .join(":")}/json?key=${tomtomKey}&traffic=true&travelMode=car`;
+
+  const fetchRoute = async (points: [number, number][]) => {
+    const resp = await fetch(routeUrl(points));
+    if (!resp.ok) return null;
+    const data = (await resp.json()) as any;
+    const route = data.routes?.[0];
+    if (!route) return null;
+
+    const polyline: [number, number][] = [];
+    for (const leg of route.legs) {
+      polyline.push(...leg.points.map((p: any) => [p.latitude, p.longitude] as [number, number]));
+    }
+    return {
+      polyline,
+      distanceKm: route.summary.lengthInMeters / 1000,
+      etaMinutes: Math.round(route.summary.travelTimeInSeconds / 60),
+      delayMinutes: Math.round((route.summary.trafficDelayInSeconds || 0) / 60),
+    };
+  };
+
+  try {
+    // Detour waypoint sits perpendicular to the corridor, ~1.5 km off the incident,
+    // which forces TomTom to return a genuinely different road path around it.
+    const perpLat = (1.5 / 111) * (-dLng / norm);
+    const perpLng = (1.5 / (111 * Math.cos((lat * Math.PI) / 180))) * (dLat / norm);
+    const detourWaypoint: [number, number] = [lat + perpLat, lng + perpLng];
+
+    const [standard, detour] = await Promise.all([
+      fetchRoute([origin, destination]),
+      fetchRoute([origin, detourWaypoint, destination]),
+    ]);
+
+    if (!standard) {
+      return res.json({ success: false, error: "Routing unavailable" });
+    }
+
+    const payload = {
+      success: true,
+      area: area || null,
+      incidentDelayMinutes: typeof delayMinutes === "number" ? delayMinutes : null,
+      standard,
+      detour: detour || null,
+    };
+
+    backendCache.set(cacheKey, payload, 120 * 1000);
+    return res.json(payload);
+  } catch (err) {
+    console.warn("Incident routing failed:", err);
+    return res.json({ success: false, error: "Routing request failed" });
+  }
+});
+
 app.post("/api/live-nodes-flow", async (req, res) => {
   const { nodes, cityId } = req.body;
   if (!Array.isArray(nodes) || nodes.length === 0) {
@@ -216,10 +330,12 @@ app.post("/api/live-nodes-flow", async (req, res) => {
 
       if (usedSimulation) {
         // Fallback simulation based on location and time
-        const timeFactor = Date.now() / 60000;
-        const drift = Math.sin(node.lat * 100 + timeFactor) * 12;
+        // Deterministic per node: a slow sine drift keyed to its own coordinates, so
+        // repeated polls agree with each other instead of jumping randomly.
+        const timeFactor = Math.floor(Date.now() / 300000); // steps every 5 minutes
+        const drift = Math.sin(node.lat * 100 + node.lng * 50 + timeFactor) * 12;
         freeFlow = 40;
-        speed = Math.max(10, Math.min(60, Math.round(30 + drift + (Math.random() * 6 - 3))));
+        speed = Math.max(10, Math.min(60, Math.round(30 + drift)));
       }
 
       const ratio = speed / freeFlow;
@@ -605,68 +721,15 @@ app.post("/api/route-analyze", async (req, res) => {
   if (!originCoords) originCoords = center;
   if (!destCoords) destCoords = [center[0] + 0.02, center[1] + 0.02];
 
-  // Local Mock Fallback function if TomTom is keyless or calls fail
-  const handleLocalFallback = () => {
-    const savedMins = 18;
-    const distDiff = 1.2;
-
-    const start = originCoords || center;
-    const end = destCoords || [center[0] + 0.02, center[1] + 0.02];
-
-    const generateWindingPath = (s: [number, number], e: [number, number], offsetDir: number = 1): [number, number][] => {
-      const points: [number, number][] = [];
-      const segments = 6;
-      points.push(s);
-      for (let i = 1; i < segments; i++) {
-        const ratio = i / segments;
-        const baseLat = s[0] + (e[0] - s[0]) * ratio;
-        const baseLng = s[1] + (e[1] - s[1]) * ratio;
-        const wave = Math.sin(ratio * Math.PI);
-        const latOffset = wave * 0.007 * offsetDir * (i % 2 === 0 ? 0.85 : 1.15);
-        const lngOffset = wave * 0.007 * -offsetDir * (i % 3 === 0 ? 1.15 : 0.85);
-        points.push([baseLat + latOffset, baseLng + lngOffset]);
-      }
-      points.push(e);
-      return points;
-    };
-
-    const standardPoints = generateWindingPath(start, end, 0.35);
-    const aiPoints = generateWindingPath(start, end, 1.6);
-
-    const resultObj = {
-      success: true,
-      standardRoute: {
-        distanceKm: 16.2,
-        normalTimeMins: 22,
-        etaMinutes: 50,
-        delayMinutes: 28,
-        polylinePositions: standardPoints,
-        viaRoads: cityKey === 'mumbai' ? "Western Express Highway" : cityKey === 'bengaluru' ? "Outer Ring Road" : "Pragati Tunnel & Mathura Road"
-      },
-      aiRoute: {
-        distanceKm: 17.4,
-        normalTimeMins: 22,
-        etaMinutes: 32,
-        delayMinutes: 10,
-        polylinePositions: aiPoints,
-        viaRoads: cityKey === 'mumbai' ? "Senapati Bapat Marg" : cityKey === 'bengaluru' ? "Sarjapur Road Bypass" : "Pragati Tunnel Bypass"
-      },
-      comparison: {
-        savedMinutes: savedMins,
-        distanceDifference: distDiff,
-        delayMinutes: 18,
-        riskLevel: "medium"
-      },
-      aiSummary: `Standard routing faces heavy traffic delay (+28m). Taking the AI Recommended detour bypasses main congestion, saving approximately 18 minutes.`,
-      trafficMetrics: `Live Sensors report speed anomalies along standard corridors.`
-    };
-    backendCache.set(cacheKey, resultObj, 300 * 1000); // 5 mins cache
-    return res.json(resultObj);
+  // No synthetic geometry: if TomTom can't answer we say so, rather than
+  // returning a plausible-looking polyline that follows no real road.
+  const routingUnavailable = (reason: string) => {
+    console.warn(`Route analysis unavailable: ${reason}`);
+    return res.json({ success: false, error: "Live routing unavailable", reason });
   };
 
   if (!tomtomKey) {
-    console.log("No TOMTOM_API_KEY set. Triggering local routing fallback.");
-    return handleLocalFallback();
+    return routingUnavailable("TOMTOM_API_KEY is not configured");
   }
 
   try {
@@ -674,15 +737,13 @@ app.post("/api/route-analyze", async (req, res) => {
     const standardRes = await fetch(standardUrl);
     
     if (!standardRes.ok) {
-      console.warn("TomTom Standard Routing API returned non-ok status. Triggering local fallback.");
-      return handleLocalFallback();
+      return routingUnavailable(`TomTom routing responded ${standardRes.status}`);
     }
 
     const standardData = await standardRes.json() as any;
 
     if (!standardData.routes || standardData.routes.length === 0) {
-      console.warn("TomTom Routing API returned no standard routes. Triggering local fallback.");
-      return handleLocalFallback();
+      return routingUnavailable("TomTom returned no routes for this origin/destination");
     }
 
     // Extract Standard Route
@@ -796,8 +857,8 @@ Respond in JSON format with these exact keys:
     return res.json(resultObj);
 
   } catch (error: any) {
-    console.error("Error in /api/route-analyze. Falling back to local routing:", error);
-    return handleLocalFallback();
+    console.error("Error in /api/route-analyze:", error);
+    return routingUnavailable(error?.message || "routing request threw");
   }
 });
 

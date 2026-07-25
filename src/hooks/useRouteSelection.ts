@@ -2,99 +2,79 @@ import { useState, useEffect, useMemo } from 'react';
 import { Incident, RouteOption } from '../types';
 import { INCIDENT_ROUTES } from '../data/incidentRoutes';
 
-function generateWindingPath(start: [number, number], end: [number, number], offsetDir: number = 1): [number, number][] {
-  const points: [number, number][] = [];
-  const segments = 6;
-  points.push(start);
-  
-  for (let i = 1; i < segments; i++) {
-    const ratio = i / segments;
-    const baseLat = start[0] + (end[0] - start[0]) * ratio;
-    const baseLng = start[1] + (end[1] - start[1]) * ratio;
-    
-    // Add winding curves
-    const wave = Math.sin(ratio * Math.PI);
-    const latOffset = wave * 0.0065 * offsetDir * (i % 2 === 0 ? 0.7 : 1.3);
-    const lngOffset = wave * 0.0065 * -offsetDir * (i % 3 === 0 ? 1.2 : 0.8);
-    
-    points.push([baseLat + latOffset, baseLng + lngOffset]);
-  }
-  
-  points.push(end);
-  return points;
+interface RouteLeg {
+  polyline: [number, number][];
+  distanceKm: number;
+  etaMinutes: number;
+  delayMinutes: number;
 }
 
-function generateDynamicRoutes(incident: Incident): RouteOption[] {
-  const { lat, lng, area, delayMinutes } = incident;
-  
-  const start: [number, number] = [lat - 0.018, lng - 0.018];
-  const end: [number, number] = [lat + 0.018, lng + 0.018];
+interface IncidentRoutesResponse {
+  success: boolean;
+  standard?: RouteLeg;
+  detour?: RouteLeg | null;
+}
 
-  const standardPolyline = generateWindingPath(start, end, 0.3);
-  const aiPolyline = generateWindingPath(start, end, 1.8);
-  const altPolyline = generateWindingPath(start, end, -1.5);
+/**
+ * Turns real TomTom legs into the RouteOption shape the UI renders.
+ * Every number here comes from the routing response — nothing is invented.
+ */
+function toRouteOptions(incident: Incident, data: IncidentRoutesResponse): RouteOption[] {
+  const { standard, detour } = data;
+  if (!standard) return [];
 
-  return [
-    {
+  const area = incident.area || 'Primary Corridor';
+  const options: RouteOption[] = [];
+
+  if (detour) {
+    const savedMinutes = Math.max(0, standard.etaMinutes - detour.etaMinutes);
+    options.push({
       id: `rt-${incident.id}-ai`,
-      name: `Option 1: AI Optimized Bypass`,
-      distanceKm: 8.2,
-      normalTimeMins: 20,
-      predictedTimeMins: 24,
-      delayMins: 4,
+      name: 'AI Optimized Bypass',
+      distanceKm: Number(detour.distanceKm.toFixed(1)),
+      normalTimeMins: Math.max(1, detour.etaMinutes - detour.delayMinutes),
+      predictedTimeMins: detour.etaMinutes,
+      delayMins: detour.delayMinutes,
       isAiRecommended: true,
-      congestionPoints: ['Minor delay on detour'],
-      sparklineData: [10, 14, 12, 11, 10],
-      viaRoads: `Bypass around ${area || 'disruption'}`,
-      etaMinutes: 24,
-      predictedDelayMinutes: 4,
-      savedMinutes: Math.max(12, delayMinutes - 4),
-      risk: 'low',
-      arrivalProbability: 95,
-      polylinePositions: aiPolyline
-    },
-    {
-      id: `rt-${incident.id}-standard`,
-      name: `Option 2: Direct path (Standard Maps)`,
-      distanceKm: 7.0,
-      normalTimeMins: 18,
-      predictedTimeMins: 18 + delayMinutes,
-      delayMins: delayMinutes,
-      isAiRecommended: false,
-      congestionPoints: [`${area || 'Incident'} congestion`],
-      sparklineData: [20, 35, 50, 55, 60],
-      viaRoads: area || 'Primary Corridor',
-      etaMinutes: 18 + delayMinutes,
-      predictedDelayMinutes: delayMinutes,
-      savedMinutes: 0,
-      risk: 'high',
-      arrivalProbability: 40,
-      polylinePositions: standardPolyline
-    },
-    {
-      id: `rt-${incident.id}-alt`,
-      name: `Option 3: Alternative Corridor`,
-      distanceKm: 9.5,
-      normalTimeMins: 25,
-      predictedTimeMins: 32,
-      delayMins: 7,
-      isAiRecommended: false,
-      congestionPoints: ['Moderate volume'],
-      sparklineData: [15, 18, 20, 22, 18],
-      viaRoads: 'Secondary Ring Road',
-      etaMinutes: 32,
-      predictedDelayMinutes: 7,
-      savedMinutes: Math.max(2, delayMinutes - 14),
-      risk: 'medium',
-      arrivalProbability: 85,
-      polylinePositions: altPolyline
-    }
-  ];
+      congestionPoints: detour.delayMinutes > 0 ? [`+${detour.delayMinutes}m residual delay on detour`] : [],
+      sparklineData: [],
+      viaRoads: `Detour around ${area}`,
+      etaMinutes: detour.etaMinutes,
+      predictedDelayMinutes: detour.delayMinutes,
+      savedMinutes,
+      risk: detour.delayMinutes > 15 ? 'medium' : 'low',
+      arrivalProbability: savedMinutes > 0 ? 92 : 80,
+      polylinePositions: detour.polyline,
+    });
+  }
+
+  options.push({
+    id: `rt-${incident.id}-standard`,
+    name: 'Direct path (Standard Maps)',
+    distanceKm: Number(standard.distanceKm.toFixed(1)),
+    normalTimeMins: Math.max(1, standard.etaMinutes - standard.delayMinutes),
+    predictedTimeMins: standard.etaMinutes,
+    delayMins: standard.delayMinutes,
+    isAiRecommended: false,
+    congestionPoints: [`${area} congestion`],
+    sparklineData: [],
+    viaRoads: area,
+    etaMinutes: standard.etaMinutes,
+    predictedDelayMinutes: standard.delayMinutes,
+    savedMinutes: 0,
+    risk: standard.delayMinutes > 15 ? 'high' : standard.delayMinutes > 5 ? 'medium' : 'low',
+    arrivalProbability: standard.delayMinutes > 15 ? 45 : 75,
+    polylinePositions: standard.polyline,
+  });
+
+  return options;
 }
 
 export function useRouteSelection(incidents: Incident[]) {
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
+  const [liveRoutes, setLiveRoutes] = useState<RouteOption[]>([]);
+  const [routesLoading, setRoutesLoading] = useState(false);
 
   // Set default incident if none selected
   useEffect(() => {
@@ -108,17 +88,50 @@ export function useRouteSelection(incidents: Incident[]) {
     return incidents.find((inc) => inc.id === selectedIncidentId) || null;
   }, [incidents, selectedIncidentId]);
 
-  // Derive available routes
+  const hasSeededRoutes = selectedIncidentId ? Boolean(INCIDENT_ROUTES[selectedIncidentId]) : false;
+
+  // Fetch road-following routes around the selected incident. If routing is
+  // unavailable we show no route at all rather than a made-up line on the map.
+  useEffect(() => {
+    if (!selectedIncident || hasSeededRoutes) {
+      setLiveRoutes([]);
+      return;
+    }
+
+    let cancelled = false;
+    setRoutesLoading(true);
+
+    fetch('/api/incident-routes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        lat: selectedIncident.lat,
+        lng: selectedIncident.lng,
+        area: selectedIncident.area,
+        delayMinutes: selectedIncident.delayMinutes,
+      }),
+    })
+      .then((res) => res.json())
+      .then((data: IncidentRoutesResponse) => {
+        if (cancelled) return;
+        setLiveRoutes(data.success ? toRouteOptions(selectedIncident, data) : []);
+      })
+      .catch(() => {
+        if (!cancelled) setLiveRoutes([]);
+      })
+      .finally(() => {
+        if (!cancelled) setRoutesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedIncident?.id, selectedIncident?.lat, selectedIncident?.lng, hasSeededRoutes]);
+
   const availableRoutes = useMemo(() => {
     if (!selectedIncidentId) return [];
-    if (INCIDENT_ROUTES[selectedIncidentId]) {
-      return INCIDENT_ROUTES[selectedIncidentId];
-    }
-    if (selectedIncident) {
-      return generateDynamicRoutes(selectedIncident);
-    }
-    return [];
-  }, [selectedIncidentId, selectedIncident]);
+    return INCIDENT_ROUTES[selectedIncidentId] || liveRoutes;
+  }, [selectedIncidentId, liveRoutes]);
 
   // Automatically select the default AI route when incident selection changes
   useEffect(() => {
@@ -143,6 +156,7 @@ export function useRouteSelection(incidents: Incident[]) {
     selectedIncident,
     selectedRoute,
     availableRoutes,
+    routesLoading,
   };
 }
 export type UseRouteSelectionResult = ReturnType<typeof useRouteSelection>;

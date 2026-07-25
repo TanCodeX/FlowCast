@@ -55,37 +55,6 @@ const STORM_CELLS: Record<string, { lat: number; lng: number; radius: number }[]
   ]
 };
 
-interface RoadSegment {
-  from: TrafficNode;
-  to: TrafficNode;
-}
-
-function getMockRoadSegments(nodesList: TrafficNode[]): RoadSegment[] {
-  const segments: RoadSegment[] = [];
-  const seen = new Set<string>();
-
-  nodesList.forEach((node) => {
-    const targets = nodesList
-      .filter((n) => n.id !== node.id)
-      .map((n) => {
-        const dist = Math.pow(n.lat - node.lat, 2) + Math.pow(n.lng - node.lng, 2);
-        return { node: n, dist };
-      })
-      .sort((a, b) => a.dist - b.dist)
-      .slice(0, 2);
-
-    targets.forEach((target) => {
-      const key = [node.id, target.node.id].sort().join('-');
-      if (!seen.has(key)) {
-        seen.add(key);
-        segments.push({ from: node, to: target.node });
-      }
-    });
-  });
-
-  return segments;
-}
-
 interface InteractiveMapProps {
  nodes: TrafficNode[];
  incidents: Incident[];
@@ -327,38 +296,8 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
  <TileLayer url={tileUrl} />
 
- {/* TomTom Live Traffic Flow Overlay / mock local flow network fallback */}
- {showTraffic && (
- (import.meta as any).env.VITE_TOMTOM_API_KEY ? (
- <TileLayer url={TRAFFIC_FLOW_TILE_URL} opacity={0.65} zIndex={10} />
- ) : (
- <LayerGroup>
- {getMockRoadSegments(nodes).map((seg, idx) => {
- const avgSpeedKmh = (seg.from.avgSpeedKmh + seg.to.avgSpeedKmh) / 2;
- const statusColor = avgSpeedKmh < 18
- ? '#D93B2D'
- : avgSpeedKmh < 28
- ? '#D97706'
- : avgSpeedKmh < 42
- ? '#2563EB'
- : 'var(--color-signal-green)';
-
- return (
- <Polyline
- key={`mock-road-${idx}`}
- positions={[[seg.from.lat, seg.from.lng], [seg.to.lat, seg.to.lng]]}
- pathOptions={{
- color: statusColor,
- weight: 4,
- opacity: 0.7,
- dashArray: avgSpeedKmh < 28 ? '5, 8' : undefined
- }}
- />
- );
- })}
- </LayerGroup>
- )
- )}
+ {/* Live TomTom traffic flow, drawn on the real road network */}
+ {showTraffic && <TileLayer url={TRAFFIC_FLOW_TILE_URL} opacity={0.7} zIndex={10} />}
 
  {/* User Current Location Marker */}
  {userLocation && (

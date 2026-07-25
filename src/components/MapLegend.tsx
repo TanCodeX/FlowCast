@@ -62,8 +62,15 @@ export const MapLegend: React.FC<MapLayerFlags> = ({
             <Row><Swatch color="#2563EB" /><span>Moderate — 28-42 km/h</span></Row>
             <Row><Swatch color="#D97706" /><span>Heavy — 18-28 km/h</span></Row>
             <Row><Swatch color="#D93B2D" /><span>Severe — under 18 km/h</span></Row>
-            <Row><Line color="#059669" /><span>Flow line, solid = moving</span></Row>
-            <Row><Line color="#D97706" dashed /><span>Flow line, dashed = congested</span></Row>
+          </Group>
+        )}
+
+        {showTraffic && (
+          <Group title="Live road flow">
+            <Row><Line color="#22c55e" /><span>Free flowing</span></Row>
+            <Row><Line color="#eab308" /><span>Slowing down</span></Row>
+            <Row><Line color="#ef4444" /><span>Queueing / standstill</span></Row>
+            <Row><span className="text-[11px] text-[var(--color-steel-gray)]">Road colours come from TomTom live speed</span></Row>
           </Group>
         )}
 

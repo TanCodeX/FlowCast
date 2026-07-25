@@ -94,17 +94,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return () => clearInterval(int);
   }, []);
 
-  // Dynamic metrics calculations
-  const [commuterJitter, setCommuterJitter] = useState(0);
-
-  // Add a visual heartbeat to commuters so the dashboard looks constantly live
-  React.useEffect(() => {
-    const interval = setInterval(() => {
-      setCommuterJitter(Math.floor(Math.random() * 81) - 40); // Non-drifting jitter
-    }, 2500);
-    return () => clearInterval(interval);
-  }, []);
-
+  // Commuter load derived from live node speeds — it moves when telemetry moves,
+  // not on a random timer.
   const activeCommuters = React.useMemo(() => {
     let totalCommuters = 0;
     nodes.forEach(node => {
@@ -116,8 +107,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
       const capacityPercent = Math.min(0.95, Math.max(0.1, 1 - Math.pow(speedRatio, 1.5)));
       totalCommuters += Math.round(maxCommuters * capacityPercent);
     });
-    return (totalCommuters + commuterJitter).toLocaleString();
-  }, [nodes, commuterJitter]);
+    return totalCommuters.toLocaleString();
+  }, [nodes]);
   
   const avgConfidence = incidents.length > 0 
     ? Math.round(incidents.reduce((sum, inc) => sum + (inc.confidencePercent || 0), 0) / incidents.length)
