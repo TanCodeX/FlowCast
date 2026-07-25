@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TrafficNode, Incident } from '../types';
-import { AlertTriangle, Layers, Activity, CloudRain, Zap } from 'lucide-react';
-import { MapContainer, TileLayer, CircleMarker, Circle, Polyline, Popup, Tooltip, LayerGroup, useMap, useMapEvents } from 'react-leaflet';
+import { AlertTriangle, Layers, Activity, CloudRain, Zap, ChevronUp, Crosshair, Maximize2, RotateCcw, LocateFixed, Download } from 'lucide-react';
+import { MapContainer, TileLayer, CircleMarker, Circle, Polyline, Popup, Tooltip, LayerGroup, Marker, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Circle as LeafletCircle, Map as LeafletMap } from 'leaflet';
+import { Circle as LeafletCircle, Map as LeafletMap, divIcon } from 'leaflet';
 
 import { AnimatedIncidentCircle } from './AnimatedIncidentCircle';
 import { radiusAt, severityToColor } from '../utils/radiusAt';
@@ -55,6 +55,22 @@ const STORM_CELLS: Record<string, { lat: number; lng: number; radius: number }[]
   ]
 };
 
+/** Samples a route and returns arrow anchors with a bearing, so direction of travel is readable. */
+function routeArrows(points: [number, number][]): { position: [number, number]; bearing: number }[] {
+  if (points.length < 8) return [];
+  const step = Math.max(6, Math.floor(points.length / 8));
+  const arrows: { position: [number, number]; bearing: number }[] = [];
+
+  for (let i = step; i < points.length - 1; i += step) {
+    const [lat1, lng1] = points[i - 1];
+    const [lat2, lng2] = points[i];
+    // Screen-space bearing: 0deg points north, matching the rotated glyph.
+    const bearing = (Math.atan2(lng2 - lng1, lat2 - lat1) * 180) / Math.PI;
+    arrows.push({ position: points[i], bearing });
+  }
+  return arrows;
+}
+
 interface InteractiveMapProps {
  nodes: TrafficNode[];
  incidents: Incident[];
@@ -71,6 +87,8 @@ interface InteractiveMapProps {
  selectedNode?: TrafficNode | null;
  onViewportChange?: (viewport: Viewport) => void;
  onLayersChange?: (flags: MapLayerFlags) => void;
+ onLocate?: () => void;
+ onExpand?: () => void;
 }
 
 // Inner subcomponent to handle programmatic map viewport transitions
@@ -154,6 +172,15 @@ const MapViewportReporter: React.FC<{ onChange: (viewport: Viewport) => void }> 
  return null;
 };
 
+// Hands the Leaflet instance to the parent so the action buttons can drive it.
+const MapRefBridge: React.FC<{ onReady: (map: LeafletMap) => void }> = ({ onReady }) => {
+ const map = useMap();
+ useEffect(() => {
+ onReady(map);
+ }, [map, onReady]);
+ return null;
+};
+
 // Component to handle dynamic resizing of the container without window resize events
 const MapResizer: React.FC = () => {
  const map = useMap();
@@ -184,6 +211,8 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  selectedNode,
  onViewportChange,
  onLayersChange,
+ onLocate,
+ onExpand,
 }) => {
  const [showHeatmap, setShowHeatmap] = useState(FEATURES.heatmap);
  const [showIncidents, setShowIncidents] = useState(true);
@@ -191,6 +220,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  const [showTraffic, setShowTraffic] = useState(true);
  const [showWeather, setShowWeather] = useState(true);
  const [currentTime, setCurrentTime] = useState('');
+ const [layersOpen, setLayersOpen] = useState(false);
 
  const [mapEngine, setMapEngine] = useState<'leaflet' | 'maplibre' | 'openlayers' | 'google-road' | 'google-satellite'>('leaflet');
 
@@ -216,6 +246,52 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  }, []);
 
  const circleRef = useRef<LeafletCircle | null>(null);
+ const mapRef = useRef<LeafletMap | null>(null);
+ const handleMapReady = React.useCallback((map: LeafletMap) => {
+ mapRef.current = map;
+ }, []);
+
+ const zoomToIncident = () => {
+ if (!mapRef.current || !selectedIncident) return;
+ mapRef.current.flyTo([selectedIncident.lat, selectedIncident.lng], 15, { animate: true, duration: 1 });
+ };
+
+ const resetView = () => {
+ const center = CITIES[selectedCity]?.center || DELHI_CENTER;
+ mapRef.current?.flyTo(center, DEFAULT_ZOOM, { animate: true, duration: 1 });
+ };
+
+ const flyToUser = () => {
+ if (userLocation) {
+ mapRef.current?.flyTo([userLocation.lat, userLocation.lng], 14, { animate: true, duration: 1 });
+ } else {
+ onLocate?.();
+ }
+ };
+
+ // Tiles are cross-origin, which taints a canvas export — so the snapshot is the
+ // data behind the view: every junction and incident currently on screen.
+ const exportView = () => {
+ const map = mapRef.current;
+ if (!map) return;
+ const b = map.getBounds();
+ const within = (lat: number, lng: number) =>
+ lat >= b.getSouth() && lat <= b.getNorth() && lng >= b.getWest() && lng <= b.getEast();
+
+ const rows = [
+ ['type', 'name', 'status_or_severity', 'speed_kmh_or_delay_min', 'lat', 'lng'],
+ ...nodes.filter((n) => within(n.lat, n.lng)).map((n) => ['junction', n.name, n.status, String(n.avgSpeedKmh), String(n.lat), String(n.lng)]),
+ ...incidents.filter((i) => within(i.lat, i.lng)).map((i) => ['incident', i.title, i.severity, String(i.delayMinutes), String(i.lat), String(i.lng)]),
+ ];
+
+ const csv = rows.map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+ const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+ const a = document.createElement('a');
+ a.href = url;
+ a.download = `flowcast-view-${new Date().toISOString().slice(0, 16).replace(':', '')}.csv`;
+ a.click();
+ URL.revokeObjectURL(url);
+ };
 
  // Dynamic Tile Layer URL computation
  const tileUrl = React.useMemo(() => {
@@ -249,6 +325,8 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  return `${cityName} (LEAFLET RADAR)`;
  }
  }, [selectedCity, mapEngine]);
+
+ const routeColor = selectedRouteIsAiRecommended ? '#3575f8' : '#1c1d1f';
 
  const getNodeColor = (status: string) => {
  switch (status) {
@@ -289,6 +367,8 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
  {/* Dynamic Resizer */}
  <MapResizer />
+
+ <MapRefBridge onReady={handleMapReady} />
 
  {/* Viewport Reporter */}
  {onViewportChange && <MapViewportReporter onChange={onViewportChange} />}
@@ -374,18 +454,25 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
  return (
  <React.Fragment key={inc.id}>
- {/* Pulse Concentric Glow for Selected Marker */}
+ {/* Selected incident: wide halo + glow so it reads at a glance */}
  {isSelected && (
  <CircleMarker
  center={[inc.lat, inc.lng]}
- radius={22}
+ radius={34}
  pathOptions={{
  color: color,
- weight: 2,
+ weight: 3,
  fillColor: color,
- fillOpacity: 0.15,
+ fillOpacity: 0.18,
  className: 'animate-pulse',
  }}
+ />
+ )}
+ {isSelected && (
+ <CircleMarker
+ center={[inc.lat, inc.lng]}
+ radius={13}
+ pathOptions={{ color: '#FFFFFF', weight: 3, fillColor: color, fillOpacity: 1 }}
  />
  )}
 
@@ -561,30 +648,105 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  <>
  <Polyline
  positions={detourPositions}
- pathOptions={{ color: '#FFFFFF', weight: 9, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }}
+ pathOptions={{ color: '#FFFFFF', weight: 12, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }}
  />
  <Polyline
  positions={detourPositions}
  pathOptions={{
- color: selectedRouteIsAiRecommended ? '#3575f8' : '#1c1d1f',
- weight: 5,
+ color: routeColor,
+ weight: 7,
  opacity: 1,
  lineCap: 'round',
  lineJoin: 'round',
  }}
  />
+ {routeArrows(detourPositions).map((arrow, idx) => (
+ <Marker
+ key={`route-arrow-${idx}`}
+ position={arrow.position}
+ interactive={false}
+ icon={divIcon({
+ className: '',
+ iconSize: [18, 18],
+ iconAnchor: [9, 9],
+ html: `<div style="transform: rotate(${arrow.bearing}deg); color:#fff; font-size:16px; line-height:18px; text-align:center; text-shadow:0 1px 2px rgba(0,0,0,.45)">&#9650;</div>`,
+ })}
+ />
+ ))}
  </>
  )}
  </MapContainer>
 
- {/* Layer Controls Bar */}
- <div className="absolute bottom-4 left-4 right-4 w-fit max-w-[calc(100%-2rem)] bg-[var(--color-card-snow)] border border-[var(--color-cloud)] p-1.5 flex flex-wrap items-center gap-1.5 text-[12px] z-[1000] shadow-[var(--shadow-sm)] rounded-[var(--radius-lg)] font-medium">
- <div className="flex items-center gap-1 bg-[var(--color-paper-white)] px-2 py-1 border border-[var(--color-cloud)] rounded-[100px] text-[var(--color-ink-black)]">
- <span className="text-[10px] text-[var(--color-graphite)] uppercase ">Base Layer</span>
+ {/* Layer Controls — only the two most-used toggles stay visible; the rest
+ live behind Layers so the map keeps its space. */}
+ <div className="absolute bottom-3 left-3 flex items-end gap-2 z-[1000]">
+ <div className="bg-[var(--color-card-snow)] border border-[var(--color-cloud)] p-1 flex items-center gap-1 text-[11px] shadow-[var(--shadow-sm)] rounded-[100px] font-medium">
+ <button
+ onClick={() => setShowTraffic(!showTraffic)}
+ title="Live traffic flow"
+ className={`px-2.5 py-1 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
+ showTraffic ? 'bg-[var(--color-ink-black)] text-white' : 'bg-transparent text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
+ }`}
+ >
+ <Activity className="w-3 h-3" />
+ <span>Traffic</span>
+ </button>
+
+ <button
+ onClick={() => setShowIncidents(!showIncidents)}
+ title="Incident markers"
+ className={`px-2.5 py-1 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
+ showIncidents ? 'bg-[var(--color-ink-black)] text-white' : 'bg-transparent text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
+ }`}
+ >
+ <AlertTriangle className="w-3 h-3" />
+ <span>Incidents</span>
+ </button>
+
+ <div className="relative">
+ <button
+ onClick={() => setLayersOpen(!layersOpen)}
+ className={`px-2.5 py-1 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
+ layersOpen ? 'bg-[var(--color-ink-black)] text-white' : 'bg-transparent text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
+ }`}
+ >
+ <Layers className="w-3 h-3" />
+ <span>Layers</span>
+ <ChevronUp className={`w-3 h-3 transition-transform ${layersOpen ? 'rotate-180' : ''}`} />
+ </button>
+
+ {layersOpen && (
+ <div className="absolute bottom-full left-0 mb-2 w-[210px] bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] shadow-[var(--shadow-sm)] p-3 flex flex-col gap-2">
+ {[
+ { label: 'Weather radar', icon: CloudRain, on: showWeather, toggle: () => setShowWeather(!showWeather) },
+ { label: 'Forecast heatmap', icon: Layers, on: showHeatmap, toggle: () => setShowHeatmap(!showHeatmap) },
+ { label: 'AI detour route', icon: Zap, on: showAlternativeRoutes, toggle: () => setShowAlternativeRoutes(!showAlternativeRoutes) },
+ ].map(({ label, icon: Icon, on, toggle }) => (
+ <button
+ key={label}
+ onClick={toggle}
+ className="flex items-center justify-between gap-2 text-[12px] text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)] bg-transparent border-none cursor-pointer p-1 rounded-[var(--radius-inputs)] hover:bg-[var(--color-paper-white)] transition-colors"
+ >
+ <span className="flex items-center gap-2">
+ <Icon className="w-3.5 h-3.5" />
+ {label}
+ </span>
+ <span
+ className={`w-8 h-4 rounded-[100px] relative transition-colors ${on ? 'bg-[var(--color-signal-green)]' : 'bg-[var(--color-mist)]'}`}
+ >
+ <span
+ className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${on ? 'left-[18px]' : 'left-0.5'}`}
+ />
+ </span>
+ </button>
+ ))}
+
+ <label className="flex flex-col gap-1 pt-2 border-t border-[var(--color-mist)] text-[10px] uppercase tracking-[var(--tracking-caption)] text-[var(--color-graphite)]">
+ Base layer
  <select
  value={mapEngine}
  onChange={(e: any) => setMapEngine(e.target.value)}
- className="bg-transparent border-none text-[10px] font-medium text-[var(--color-ink-black)] outline-none cursor-pointer pr-1 uppercase"
+ className="bg-[var(--color-paper-white)] border border-[var(--color-cloud)] rounded-[var(--radius-inputs)] px-2 py-1 text-[12px] font-medium text-[var(--color-ink-black)] outline-none cursor-pointer normal-case tracking-normal"
  >
  <option value="leaflet">Leaflet (Light)</option>
  <option value="maplibre">MapLibre GL</option>
@@ -592,58 +754,33 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  <option value="google-road">Google Roads</option>
  <option value="google-satellite">Google Satellite</option>
  </select>
+ </label>
+ </div>
+ )}
+ </div>
+ </div>
  </div>
 
+ {/* Map actions */}
+ <div className="absolute top-16 right-4 z-[1000] flex flex-col bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-inputs)] shadow-[var(--shadow-sm)] overflow-hidden">
+ {[
+ { icon: Crosshair, label: 'Zoom to incident', action: zoomToIncident, disabled: !selectedIncident },
+ { icon: RotateCcw, label: 'Reset view', action: resetView, disabled: false },
+ { icon: LocateFixed, label: userLocation ? 'Go to my location' : 'Locate me', action: flyToUser, disabled: !userLocation && !onLocate },
+ { icon: Maximize2, label: 'Fullscreen map', action: () => onExpand?.(), disabled: !onExpand },
+ { icon: Download, label: 'Export this view (CSV)', action: exportView, disabled: false },
+ ].map(({ icon: Icon, label, action, disabled }) => (
  <button
- onClick={() => setShowTraffic(!showTraffic)}
- className={`px-3 py-1.5 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
- showTraffic ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
- }`}
+ key={label}
+ onClick={action}
+ disabled={disabled}
+ title={label}
+ aria-label={label}
+ className="p-2 bg-transparent border-none cursor-pointer text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)] hover:bg-[var(--color-paper-white)] transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
  >
- <Activity className="w-3.5 h-3.5" />
- <span>Live Traffic</span>
+ <Icon className="w-4 h-4" />
  </button>
-
- <button
- onClick={() => setShowWeather(!showWeather)}
- className={`px-3 py-1.5 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
- showWeather ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
- }`}
- >
- <CloudRain className="w-3.5 h-3.5" />
- <span>Weather</span>
- </button>
-
- <button
- onClick={() => setShowHeatmap(!showHeatmap)}
- className={`px-3 py-1.5 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
- showHeatmap ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
- }`}
- >
- <Layers className="w-3.5 h-3.5" />
- <span>Heatmap</span>
- </button>
-
- <button
- onClick={() => setShowIncidents(!showIncidents)}
- className={`px-3 py-1.5 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
- showIncidents ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
- }`}
- >
- <AlertTriangle className="w-3.5 h-3.5" />
- <span>Incidents</span>
- </button>
-
- <button
- onClick={() => setShowAlternativeRoutes(!showAlternativeRoutes)}
- className={`px-3 py-1.5 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
- showAlternativeRoutes ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
- }`}
- >
- <Zap className="w-3.5 h-3.5 text-[var(--color-signal-green)]" />
- <span>AI Detours</span>
- </button>
-
+ ))}
  </div>
 
  {/* GPS Fix Badge */}

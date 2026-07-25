@@ -65,7 +65,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
           <div className="text-[length:var(--text-caption)] font-medium uppercase tracking-[var(--tracking-caption)] text-[var(--color-graphite)]">
             {mode === 'node' ? 'Junction' : 'Incident'}
           </div>
-          <h3 className="text-[20px] font-medium text-[var(--color-ink-black)] leading-snug mt-1 truncate">
+          <h3 className="text-[18px] font-medium text-[var(--color-ink-black)] leading-snug mt-1 break-words">
             {mode === 'node' ? node?.name : incident?.title}
           </h3>
         </div>

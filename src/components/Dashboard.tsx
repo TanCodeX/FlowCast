@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Incident, TrafficNode, CameraFeed, SocialSignal, RouteOption, RouteAnalysis } from '../types';
 import { InteractiveMap } from './InteractiveMap';
-import { Clock, Sparkles, AlertTriangle, ArrowRight, Activity, TrendingUp } from 'lucide-react';
+import { Clock, Sparkles, AlertTriangle, ArrowRight, Activity, TrendingUp, ChevronDown } from 'lucide-react';
 import { calculateStartsInMinutes } from '../utils/forecast';
 import { InspectorPanel } from './InspectorPanel';
 import { MapLegend, MapLayerFlags } from './MapLegend';
@@ -35,6 +35,7 @@ interface DashboardProps {
   
   forecastMinutes: number;
   userLocation?: { lat: number; lng: number; name?: string } | null;
+  onLocate?: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -65,6 +66,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   
   forecastMinutes,
   userLocation,
+  onLocate,
 }) => {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>('node-cp');
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
@@ -75,6 +77,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [inspectMode, setInspectMode] = useState<'node' | 'incident' | null>(null);
   const [viewport, setViewport] = useState<Viewport | null>(null);
   const [metricsScope, setMetricsScope] = useState<'city' | 'view'>('city');
+  const [legendOpen, setLegendOpen] = useState(false);
+  const [expandedCard, setExpandedCard] = useState<'planner' | 'forecast' | null>(null);
   const [layerFlags, setLayerFlags] = useState<MapLayerFlags>({
     showTraffic: true,
     showWeather: true,
@@ -150,17 +154,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setInspectMode('incident');
   };
 
+  // Keep the selected incident row in view when selection comes from the map
+  const incidentListRef = React.useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!selectedIncidentId || !incidentListRef.current) return;
+    const row = incidentListRef.current.querySelector(`[data-incident-id="${selectedIncidentId}"]`);
+    row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [selectedIncidentId]);
+
   return (
-    <div className="w-full max-w-[var(--page-max-width)] mx-auto flex flex-col items-center gap-6 animate-zoom-in relative mb-12">
+    <div className="w-full max-w-[var(--page-max-width)] mx-auto flex flex-col items-center gap-4 animate-zoom-in relative mb-12">
       {/* Title block */}
-      <div className="w-full text-left relative mt-6 z-10 px-4 md:px-0 flex justify-between items-end">
+      <div className="w-full text-left relative mt-1 z-10 px-4 md:px-0 flex justify-between items-center">
         <div>
-          <h2 className="text-[32px] font-medium text-[var(--color-ink-black)] leading-tight">
+          <h2 className="text-[24px] font-medium text-[var(--color-ink-black)] leading-tight">
             Command Center Overview
           </h2>
-          <p className="text-[14px] text-[var(--color-steel-gray)] mt-2">
-            High-level monitoring of the grid. Dive into workspaces for full operational control.
-          </p>
         </div>
         <div className="flex items-center gap-4 text-sm text-[var(--color-ink-black)]/70">
           <span className="hidden md:flex items-center gap-1.5 text-[var(--color-ink-black)] bg-[var(--color-ink-black)]/10 px-3 py-1 font-bold rounded-md border border-[var(--color-cloud)]">
@@ -185,11 +194,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
       )}
 
       {/* Main Layout Grid: ~70% map, ~30% summary cards */}
-      <div className="w-full grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-[var(--spacing-20)] items-start">
+      <div className="w-full grid grid-cols-1 lg:grid-cols-[3fr_1fr] gap-[var(--spacing-20)] items-start">
         
         {/* Left Area: Map (occupying ~70% of viewport width) */}
         <div className="flex flex-col gap-[var(--element-gap)] min-w-0">
-          <div className="relative w-full h-[560px] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] shadow-[var(--shadow-subtle)] bg-[var(--color-card-snow)] overflow-hidden">
+          <div className="relative w-full h-[calc(100vh-230px)] min-h-[520px] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] shadow-[var(--shadow-subtle)] bg-[var(--color-card-snow)] overflow-hidden">
             <InteractiveMap
               nodes={nodes}
               incidents={incidents}
@@ -200,6 +209,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
               selectedNode={inspectMode === 'node' ? inspectedNode : null}
               onViewportChange={setViewport}
               onLayersChange={setLayerFlags}
+              onLocate={onLocate}
+              onExpand={() => setIsFullScreenMapOpen(true)}
               forecastMinutesAhead={forecastMinutes}
               detourPositions={selectedRoute?.polylinePositions}
               selectedRouteIsAiRecommended={selectedRoute?.isAiRecommended}
@@ -209,8 +220,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
           </div>
 
-          {/* Map Legend — a card of its own, outside the map */}
-          <MapLegend {...layerFlags} />
+          {/* Map Legend — collapsed by default, it is reference material */}
+          <div className="bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] shadow-[var(--shadow-subtle)]">
+            <button
+              onClick={() => setLegendOpen(!legendOpen)}
+              className="w-full flex items-center justify-between gap-2 px-5 py-3 bg-transparent border-none cursor-pointer text-left"
+            >
+              <span className="text-[length:var(--text-caption)] font-medium uppercase tracking-[var(--tracking-caption)] text-[var(--color-ink-black)]">
+                Map Legend
+              </span>
+              <ChevronDown className={`w-4 h-4 text-[var(--color-steel-gray)] transition-transform ${legendOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {legendOpen && (
+              <div className="px-5 pb-5">
+                <MapLegend {...layerFlags} />
+              </div>
+            )}
+          </div>
 
           {/* Social Telemetry Strip under Map */}
           <div className="flex flex-col sm:flex-row items-center gap-4 bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] p-4 shadow-[var(--shadow-subtle)]">
@@ -349,43 +375,55 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </button>
             </div>
 
-            {/* Planner Summary Card */}
-            <div className="bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] p-5 shadow-[var(--shadow-subtle)]">
-              <div className="flex items-center gap-2 text-sm font-bold text-[var(--color-ink-black)] uppercase mb-2">
-                <Sparkles className="w-4 h-4" />
-                <span>AI Route Planner</span>
+            {/* Planner + Forecast: secondary to the map and live incidents, so they
+                stay collapsed until asked for */}
+            {[
+              {
+                key: 'planner' as const,
+                icon: Sparkles,
+                title: 'AI Route Planner',
+                body: availableRoutes.length > 0
+                  ? `Ready to deploy ${availableRoutes.length} AI optimized detour options to fleet.`
+                  : 'No active deployments. Planner ready for analysis.',
+                cta: 'Open Planner Workspace',
+                onOpen: onNavigateToPlanner,
+              },
+              {
+                key: 'forecast' as const,
+                icon: TrendingUp,
+                title: 'Forecast Snapshot',
+                body: forecastMinutes > 0
+                  ? `Currently simulating +${forecastMinutes} minutes ahead.`
+                  : 'Run Llama 3.3 70B simulation to predict disruption cascading effects.',
+                cta: 'Open Forecast Workspace',
+                onOpen: onNavigateToForecast,
+              },
+            ].map(({ key, icon: Icon, title, body, cta, onOpen }) => (
+              <div key={key} className="bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] shadow-[var(--shadow-subtle)]">
+                <button
+                  onClick={() => setExpandedCard(expandedCard === key ? null : key)}
+                  className="w-full flex items-center justify-between gap-2 px-5 py-3 bg-transparent border-none cursor-pointer text-left"
+                >
+                  <span className="flex items-center gap-2 text-sm font-bold text-[var(--color-ink-black)] uppercase">
+                    <Icon className="w-4 h-4" />
+                    {title}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-[var(--color-steel-gray)] transition-transform ${expandedCard === key ? 'rotate-180' : ''}`} />
+                </button>
+
+                {expandedCard === key && (
+                  <div className="px-5 pb-5">
+                    <p className="text-sm text-[var(--color-steel-gray)] mb-4 leading-relaxed">{body}</p>
+                    <button
+                      onClick={onOpen}
+                      className="w-full bg-[var(--color-paper-white)] hover:bg-[var(--color-cloud)] border border-[var(--color-cloud)] text-[var(--color-ink-black)] px-4 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-2 rounded-lg cursor-pointer"
+                    >
+                      {cta} <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
-              <p className="text-sm text-[var(--color-steel-gray)] mb-4">
-                {availableRoutes.length > 0 
-                  ? `Ready to deploy ${availableRoutes.length} AI optimized detour options to fleet.` 
-                  : "No active deployments. Planner ready for analysis."}
-              </p>
-              <button
-                onClick={onNavigateToPlanner}
-                className="w-full bg-[var(--color-paper-white)] hover:bg-[var(--color-cloud)] border border-[var(--color-cloud)] text-[var(--color-ink-black)] px-4 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-2 rounded-lg cursor-pointer"
-              >
-                Open Planner Workspace <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-          
-            {/* Forecast Summary Card */}
-            <div className="bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] p-5 shadow-[var(--shadow-subtle)]">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2 text-sm font-bold text-[var(--color-ink-black)] uppercase">
-                  <TrendingUp className="w-4 h-4" />
-                  <span>Forecast Snapshot</span>
-                </div>
-              </div>
-              <p className="text-sm text-[var(--color-steel-gray)] mb-4 leading-relaxed">
-                 {forecastMinutes > 0 ? `Currently simulating +${forecastMinutes} minutes ahead.` : "Run Llama 3.3 70B simulation to predict disruption cascading effects."}
-              </p>
-              <button
-                onClick={onNavigateToForecast}
-                className="w-full bg-[var(--color-paper-white)] hover:bg-[var(--color-cloud)] border border-[var(--color-cloud)] text-[var(--color-ink-black)] px-4 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-2 rounded-lg cursor-pointer"
-              >
-                Open Forecast Workspace <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
+            ))}
             </>
           )}
 

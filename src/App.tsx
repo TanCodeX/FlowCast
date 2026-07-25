@@ -792,6 +792,7 @@ export default function App() {
               selectedRoute={activeRoute}
               availableRoutes={currentRoutes}
               userLocation={userLocation}
+              onLocate={handleGetUserLocation}
  
               selectedCity={selectedCity}
               onSelectCity={setSelectedCity}
