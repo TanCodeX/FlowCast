@@ -4,6 +4,7 @@ import { InteractiveMap } from './InteractiveMap';
 import { Clock, Sparkles, AlertTriangle, ArrowRight, Activity, TrendingUp } from 'lucide-react';
 import { calculateStartsInMinutes } from '../utils/forecast';
 import { InspectorPanel } from './InspectorPanel';
+import { MapLegend, MapLayerFlags } from './MapLegend';
 import { Viewport, inBounds, summarizeNodes } from '../utils/viewport';
 
 interface DashboardProps {
@@ -74,6 +75,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [inspectMode, setInspectMode] = useState<'node' | 'incident' | null>(null);
   const [viewport, setViewport] = useState<Viewport | null>(null);
   const [metricsScope, setMetricsScope] = useState<'city' | 'view'>('city');
+  const [layerFlags, setLayerFlags] = useState<MapLayerFlags>({
+    showTraffic: true,
+    showWeather: true,
+    showHeatmap: true,
+    showIncidents: true,
+    showAlternativeRoutes: true,
+    hasUserLocation: false,
+  });
 
   useEffect(() => {
     const updateTime = () => {
@@ -199,6 +208,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               onSelectNode={handleSelectNode}
               selectedNode={inspectMode === 'node' ? inspectedNode : null}
               onViewportChange={setViewport}
+              onLayersChange={setLayerFlags}
               forecastMinutesAhead={forecastMinutes}
               detourPositions={selectedRoute?.polylinePositions}
               selectedRouteIsAiRecommended={selectedRoute?.isAiRecommended}
@@ -207,6 +217,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
             />
 
           </div>
+
+          {/* Map Legend — a card of its own, outside the map */}
+          <MapLegend {...layerFlags} />
 
           {/* Social Telemetry Strip under Map */}
           <div className="flex flex-col sm:flex-row items-center gap-4 bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] p-4 shadow-[var(--shadow-subtle)]">

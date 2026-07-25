@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TrafficNode, Incident } from '../types';
-import { AlertTriangle, Layers, Activity, CloudRain, Zap, Info } from 'lucide-react';
+import { AlertTriangle, Layers, Activity, CloudRain, Zap } from 'lucide-react';
 import { MapContainer, TileLayer, CircleMarker, Circle, Polyline, Popup, Tooltip, LayerGroup, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Circle as LeafletCircle, Map as LeafletMap } from 'leaflet';
@@ -11,7 +11,7 @@ import { isIncidentConfirmed } from '../utils/verification';
 import { DELHI_CENTER, DELHI_NCR_BOUNDS, DEFAULT_ZOOM, MIN_ZOOM, MAX_ZOOM, TILE_LAYER_URL, TRAFFIC_FLOW_TILE_URL } from '../constants/map';
 import { FEATURES } from '../constants/features';
 import { CITIES } from '../constants/cities';
-import { MapLegend } from './MapLegend';
+import { MapLayerFlags } from './MapLegend';
 import { Viewport } from '../utils/viewport';
 
 interface WaterloggingHazard {
@@ -101,6 +101,7 @@ interface InteractiveMapProps {
  userLocation?: { lat: number; lng: number; name?: string } | null;
  selectedNode?: TrafficNode | null;
  onViewportChange?: (viewport: Viewport) => void;
+ onLayersChange?: (flags: MapLayerFlags) => void;
 }
 
 // Inner subcomponent to handle programmatic map viewport transitions
@@ -213,6 +214,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  userLocation,
  selectedNode,
  onViewportChange,
+ onLayersChange,
 }) => {
  const [showHeatmap, setShowHeatmap] = useState(FEATURES.heatmap);
  const [showIncidents, setShowIncidents] = useState(true);
@@ -220,8 +222,19 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  const [showTraffic, setShowTraffic] = useState(true);
  const [showWeather, setShowWeather] = useState(true);
  const [currentTime, setCurrentTime] = useState('');
- const [showLegend, setShowLegend] = useState(false);
+
  const [mapEngine, setMapEngine] = useState<'leaflet' | 'maplibre' | 'openlayers' | 'google-road' | 'google-satellite'>('leaflet');
+
+ useEffect(() => {
+ onLayersChange?.({
+ showTraffic,
+ showWeather,
+ showHeatmap,
+ showIncidents,
+ showAlternativeRoutes,
+ hasUserLocation: !!userLocation,
+ });
+ }, [showTraffic, showWeather, showHeatmap, showIncidents, showAlternativeRoutes, userLocation, onLayersChange]);
 
  useEffect(() => {
  const updateTime = () => {
@@ -683,29 +696,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  <span>AI Detours</span>
  </button>
 
- <button
- onClick={() => setShowLegend(!showLegend)}
- className={`px-3 py-1.5 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
- showLegend ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
- }`}
- >
- <Info className="w-3.5 h-3.5" />
- <span>Legend</span>
- </button>
  </div>
-
- {/* Legend card — pinned to the left edge of the map */}
- {showLegend && (
- <MapLegend
- showTraffic={showTraffic}
- showWeather={showWeather}
- showHeatmap={showHeatmap}
- showIncidents={showIncidents}
- showAlternativeRoutes={showAlternativeRoutes}
- hasUserLocation={!!userLocation}
- onClose={() => setShowLegend(false)}
- />
- )}
 
  {/* GPS Fix Badge */}
  {userLocation && (
