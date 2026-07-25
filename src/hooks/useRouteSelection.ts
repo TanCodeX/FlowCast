@@ -88,12 +88,11 @@ export function useRouteSelection(incidents: Incident[]) {
     return incidents.find((inc) => inc.id === selectedIncidentId) || null;
   }, [incidents, selectedIncidentId]);
 
-  const hasSeededRoutes = selectedIncidentId ? Boolean(INCIDENT_ROUTES[selectedIncidentId]) : false;
-
   // Fetch road-following routes around the selected incident. If routing is
-  // unavailable we show no route at all rather than a made-up line on the map.
+  // unavailable we fall back to the seeded corridors, and failing that show
+  // nothing rather than a made-up line on the map.
   useEffect(() => {
-    if (!selectedIncident || hasSeededRoutes) {
+    if (!selectedIncident) {
       setLiveRoutes([]);
       return;
     }
@@ -126,11 +125,13 @@ export function useRouteSelection(incidents: Incident[]) {
     return () => {
       cancelled = true;
     };
-  }, [selectedIncident?.id, selectedIncident?.lat, selectedIncident?.lng, hasSeededRoutes]);
+  }, [selectedIncident?.id, selectedIncident?.lat, selectedIncident?.lng]);
 
   const availableRoutes = useMemo(() => {
     if (!selectedIncidentId) return [];
-    return INCIDENT_ROUTES[selectedIncidentId] || liveRoutes;
+    // Live road geometry first — the seeded arrays are coarse hand-drawn corridors.
+    if (liveRoutes.length > 0) return liveRoutes;
+    return INCIDENT_ROUTES[selectedIncidentId] || [];
   }, [selectedIncidentId, liveRoutes]);
 
   // Automatically select the default AI route when incident selection changes

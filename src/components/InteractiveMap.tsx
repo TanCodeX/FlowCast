@@ -297,7 +297,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  <TileLayer url={tileUrl} />
 
  {/* Live TomTom traffic flow, drawn on the real road network */}
- {showTraffic && <TileLayer url={TRAFFIC_FLOW_TILE_URL} opacity={0.7} zIndex={10} />}
+ {showTraffic && <TileLayer url={TRAFFIC_FLOW_TILE_URL} opacity={0.85} zIndex={10} />}
 
  {/* User Current Location Marker */}
  {userLocation && (
@@ -555,16 +555,25 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  </LayerGroup>
  )}
 
- {/* Detour Routes Polyline */}
+ {/* Selected route — white casing under a solid core so it stays legible
+ on top of the live traffic colours */}
  {showAlternativeRoutes && detourPositions && detourPositions.length > 0 && (
+ <>
+ <Polyline
+ positions={detourPositions}
+ pathOptions={{ color: '#FFFFFF', weight: 9, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }}
+ />
  <Polyline
  positions={detourPositions}
  pathOptions={{
- color: selectedRouteIsAiRecommended ? '#10B981' : '#D93B2D',
- dashArray: '6, 6',
- weight: 3.5,
+ color: selectedRouteIsAiRecommended ? '#3575f8' : '#1c1d1f',
+ weight: 5,
+ opacity: 1,
+ lineCap: 'round',
+ lineJoin: 'round',
  }}
  />
+ </>
  )}
  </MapContainer>
 

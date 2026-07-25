@@ -67,10 +67,10 @@ export const MapLegend: React.FC<MapLayerFlags> = ({
 
         {showTraffic && (
           <Group title="Live road flow">
-            <Row><Line color="#22c55e" /><span>Free flowing</span></Row>
-            <Row><Line color="#eab308" /><span>Slowing down</span></Row>
+            <Row><Line color="#eab308" /><span>Slower than usual</span></Row>
+            <Row><Line color="#f97316" /><span>Heavy delay</span></Row>
             <Row><Line color="#ef4444" /><span>Queueing / standstill</span></Row>
-            <Row><span className="text-[11px] text-[var(--color-steel-gray)]">Road colours come from TomTom live speed</span></Row>
+            <Row><span className="text-[11px] text-[var(--color-steel-gray)]">Only delayed roads are coloured — clear roads stay plain</span></Row>
           </Group>
         )}
 
@@ -96,9 +96,9 @@ export const MapLegend: React.FC<MapLayerFlags> = ({
         )}
 
         {showAlternativeRoutes && (
-          <Group title="Routes">
-            <Row><Line color="#10B981" dashed /><span>AI recommended detour</span></Row>
-            <Row><Line color="#D93B2D" dashed /><span>Standard route</span></Row>
+          <Group title="Selected route">
+            <Row><Line color="#3575f8" /><span>AI recommended detour</span></Row>
+            <Row><Line color="#1c1d1f" /><span>Standard route</span></Row>
           </Group>
         )}
 
