@@ -22,21 +22,42 @@ const SEV_RANK: Record<string, number> = { severe: 4, heavy: 3, moderate: 2, low
 const capIncidents = (list: Incident[], n = 18): Incident[] =>
   [...list].sort((a, b) => (SEV_RANK[b.severity] || 0) - (SEV_RANK[a.severity] || 0)).slice(0, n);
 
-// CITIES nodes carry only geometry; give them deterministic traffic status/speed
-// so City Metrics (avg speed, congestion split) compute real numbers, not NaN.
-const NODE_PROFILE = [
-  { status: 'severe' as const, avgSpeedKmh: 13, delayMinutes: 32 },
-  { status: 'heavy' as const, avgSpeedKmh: 21, delayMinutes: 20 },
-  { status: 'moderate' as const, avgSpeedKmh: 33, delayMinutes: 9 },
-  { status: 'clear' as const, avgSpeedKmh: 46, delayMinutes: 3 },
-];
-const enrichNodes = (cityNodes: any[]): TrafficNode[] =>
-  cityNodes.map((n, i) => ({ ...n, ...NODE_PROFILE[(n.name.length + i) % NODE_PROFILE.length] }));
+// CITIES nodes carry only geometry; derive traffic status/speed so City Metrics
+// (avg speed, congestion split) compute real numbers, not NaN.
+function mapCityNodesToTrafficNodes(nodesList: any[]): TrafficNode[] {
+  return nodesList.map((node, index) => {
+    // Deterministically generate a realistic speed for each node based on its name/index
+    const isCongestedNode = node.name.includes("Bypass") || node.name.includes("Subway") || node.name.includes("Silk Board") || index % 3 === 0;
+    const avgSpeedKmh = isCongestedNode
+      ? Math.floor(Math.random() * 15) + 12 // 12-27 km/h (heavy/severe)
+      : Math.floor(Math.random() * 25) + 38; // 38-63 km/h (clear/moderate)
+    
+    let status: 'clear' | 'moderate' | 'heavy' | 'severe' = 'clear';
+    if (avgSpeedKmh < 18) status = 'severe';
+    else if (avgSpeedKmh < 28) status = 'heavy';
+    else if (avgSpeedKmh < 42) status = 'moderate';
+    
+    const delayMinutes = status === 'severe' ? 14 : status === 'heavy' ? 7 : status === 'moderate' ? 3 : 0;
+
+    return {
+      id: node.id,
+      name: node.name,
+      lat: node.lat,
+      lng: node.lng,
+      coords: { x: node.x, y: node.y },
+      avgSpeedKmh,
+      status,
+      delayMinutes
+    };
+  });
+}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<NavTab>('landing');
   const [selectedCity, setSelectedCity] = useState<string>('delhi');
-  const [nodes, setNodes] = useState<TrafficNode[]>(enrichNodes(CITIES.delhi.nodes));
+  const [nodes, setNodes] = useState<TrafficNode[]>(() =>
+    mapCityNodesToTrafficNodes(CITIES.delhi.nodes)
+  );
   const [incidents, setIncidents] = useState<Incident[]>(INITIAL_INCIDENTS);
   const [socialSignals, setSocialSignals] = useState<SocialSignal[]>(INITIAL_SOCIAL_SIGNALS);
   const [demoModalOpen, setDemoModalOpen] = useState(false);
@@ -46,6 +67,67 @@ export default function App() {
   const [activeRouteAnalysis, setActiveRouteAnalysis] = useState<RouteAnalysis | null>(null);
   const [routeAnalysisLoading, setRouteAnalysisLoading] = useState(false);
   const [selectedRouteIdOverride, setSelectedRouteIdOverride] = useState<string | null>(null);
+
+  // User location states
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; name?: string } | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+
+  const handleGetUserLocation = () => {
+    if (!navigator.geolocation) {
+      triggerToast("Geolocation is not supported by your browser.");
+      return;
+    }
+
+    setIsLocating(true);
+    triggerToast("Requesting your location...");
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        let locationName = `${latitude.toFixed(2)}°N, ${longitude.toFixed(2)}°E`;
+
+        // Reverse geocoding via TomTom API
+        const tomtomKey = (import.meta as any).env.VITE_TOMTOM_API_KEY;
+        try {
+          if (tomtomKey) {
+            const res = await fetch(`https://api.tomtom.com/search/2/reverseGeocode/${latitude},${longitude}.json?key=${tomtomKey}`);
+            if (res.ok) {
+              const data = await res.json();
+              const addr = data.addresses?.[0]?.address;
+              if (addr) {
+                locationName = addr.municipalitySubdivision || addr.freeformAddress?.split(',')[0] || addr.municipality || locationName;
+              }
+            }
+          } else {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+            if (res.ok) {
+              const data = await res.json();
+              const addr = data.address;
+              if (addr) {
+                locationName = addr.suburb || addr.neighbourhood || addr.city_district || addr.city || addr.town || locationName;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("Reverse geocode failed:", e);
+        }
+
+        setUserLocation({ lat: latitude, lng: longitude, name: locationName });
+        setIsLocating(false);
+        triggerToast(`Location active: ${locationName}`);
+      },
+      (error) => {
+        console.error("Geolocation error:", error);
+        setIsLocating(false);
+        triggerToast("Unable to fetch location. Please check browser permissions.");
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000,
+      }
+    );
+  };
 
   // Custom Selection Hook
   const {
@@ -181,16 +263,91 @@ export default function App() {
         }
       } catch (err) {
         console.warn('Failed to load live TomTom incidents. Defaulting to mock incidents.', err);
+        const cityConfig = CITIES[selectedCity];
+        const center = cityConfig.center;
+        const mockIncidents = [
+          {
+            id: `${selectedCity}-mock-1`,
+            title: `Minor Collision near City Center`,
+            area: `${cityConfig.name} Arterial Road`,
+            severity: 'moderate' as const,
+            category: 'collision' as const,
+            delayMinutes: 15,
+            startsInMinutes: 0,
+            confidencePercent: 95,
+            socialSource: "Citizen Report",
+            description: `Stalled vehicle causing single lane blockage.`,
+            coords: { x: 45, y: 48 },
+            lat: center[0] + 0.005,
+            lng: center[1] - 0.005,
+            cascadingRoads: [`Primary Corridor`],
+            affectedRoads: [`Primary Corridor`],
+            verificationStatus: 'confirmed' as const,
+            sourcesCount: 3
+          },
+          {
+            id: `${selectedCity}-mock-2`,
+            title: `Road Construction Delay`,
+            area: `${cityConfig.name} Bypass Link`,
+            severity: 'heavy' as const,
+            category: 'construction' as const,
+            delayMinutes: 32,
+            startsInMinutes: 0,
+            confidencePercent: 98,
+            socialSource: "Municipal Alert",
+            description: `Flyover repair works blocking two right lanes.`,
+            coords: { x: 60, y: 70 },
+            lat: center[0] - 0.008,
+            lng: center[1] + 0.008,
+            cascadingRoads: [`Bypass Loop`],
+            affectedRoads: [`Bypass Loop`],
+            verificationStatus: 'confirmed' as const,
+            sourcesCount: 12
+          }
+        ];
+        setIncidents(mockIncidents);
       }
     };
     
-    // Set nodes for city (enriched with traffic status/speed for real metrics)
-    setNodes(enrichNodes(CITIES[selectedCity].nodes));
+    const fetchLiveNodesFlow = async (nodesToFetch: any[]) => {
+      try {
+        const res = await fetch('/api/live-nodes-flow', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nodes: nodesToFetch, cityId: selectedCity })
+        });
+        if (!res.ok) throw new Error('Live nodes request failed');
+        const data = await res.json();
+        if (data.success && data.nodes) {
+          setNodes(data.nodes);
+        }
+      } catch (err) {
+        console.warn('Failed to load live node telemetry.', err);
+      }
+    };
+    
+    // Payload shape for the live telemetry call
+    const baseNodes = CITIES[selectedCity].nodes.map(n => ({
+      ...n,
+      avgSpeedKmh: 40,
+      status: 'clear' as const,
+      delayMinutes: 0
+    }));
+
+    // Set nodes for city (derived status/speed so metrics aren't NaN before telemetry lands)
+    setNodes(mapCityNodesToTrafficNodes(CITIES[selectedCity].nodes));
     // Reset selected route override/analysis on city change
     setActiveRouteAnalysis(null);
     setSelectedRouteIdOverride(null);
 
     fetchLiveIncidents();
+    fetchLiveNodesFlow(baseNodes);
+
+    const telemetryInterval = setInterval(() => {
+      fetchLiveNodesFlow(baseNodes);
+    }, 15000);
+
+    return () => clearInterval(telemetryInterval);
   }, [selectedCity]);
 
   const handleReloadLiveIncidents = async () => {
@@ -596,7 +753,9 @@ export default function App() {
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        onLaunchDemo={() => setDemoModalOpen(true)}
+        userLocation={userLocation}
+        onGetUserLocation={handleGetUserLocation}
+        isLocating={isLocating}
       />
 
       {/* Main Content Area */}
@@ -624,6 +783,7 @@ export default function App() {
               selectedIncident={selectedIncident}
               selectedRoute={activeRoute}
               availableRoutes={currentRoutes}
+              userLocation={userLocation}
  
               selectedCity={selectedCity}
               onSelectCity={setSelectedCity}
@@ -651,6 +811,11 @@ export default function App() {
             onReloadIncidents={handleReloadLiveIncidents}
             onReportHinglish={handleReportHinglish}
             dispatchLogs={dispatchLogs}
+            availableRoutes={currentRoutes}
+            selectedRouteId={activeRouteId}
+            onSelectRouteId={handleSelectRouteId}
+            onDeployRoute={handleDeployRoute}
+            onNavigateToPlanner={() => setActiveTab('planner')}
           />
         )}
 

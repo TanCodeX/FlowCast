@@ -1,14 +1,22 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { NavTab } from '../types';
-import { Radio } from 'lucide-react';
+import { Radio, Loader2, MapPin } from 'lucide-react';
 
 interface HeaderProps {
   activeTab: NavTab;
   setActiveTab: (tab: NavTab) => void;
-  onLaunchDemo: () => void;
+  userLocation?: { lat: number; lng: number; name?: string } | null;
+  onGetUserLocation?: () => void;
+  isLocating?: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, onLaunchDemo }) => {
+export const Header: React.FC<HeaderProps> = ({
+  activeTab,
+  setActiveTab,
+  userLocation,
+  onGetUserLocation,
+  isLocating,
+}) => {
   const navItems: { id: NavTab; label: string }[] = [
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'incidents', label: 'Incidents' },
@@ -49,13 +57,24 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, onLaunc
           })}
         </nav>
 
-        {/* Action Button (Outline) */}
-        <button
-          onClick={onLaunchDemo}
-          className="shrink-0 bg-transparent border border-[var(--color-body-charcoal)] text-[var(--color-body-charcoal)] rounded-[var(--radius-buttons)] px-4 py-2 text-[14px] font-medium hover:bg-[var(--color-cloud)] transition-colors whitespace-nowrap"
-        >
-          Launch Demo
-        </button>
+        {/* Action Button (Outline) — live GPS fix */}
+        {onGetUserLocation && (
+          <button
+            onClick={onGetUserLocation}
+            disabled={isLocating}
+            title={userLocation ? `Location: ${userLocation.name || `${userLocation.lat.toFixed(4)}, ${userLocation.lng.toFixed(4)}`}` : 'Locate my position'}
+            className={`shrink-0 flex items-center gap-2 bg-transparent border rounded-[var(--radius-buttons)] px-4 py-2 text-[14px] font-medium transition-colors whitespace-nowrap disabled:opacity-60 ${
+              userLocation
+                ? 'border-[var(--color-signal-green)] text-[var(--color-signal-green)]'
+                : 'border-[var(--color-body-charcoal)] text-[var(--color-body-charcoal)] hover:bg-[var(--color-cloud)]'
+            }`}
+          >
+            {isLocating ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />}
+            <span className="truncate max-w-[130px]">
+              {isLocating ? 'Locating' : userLocation ? (userLocation.name || 'Located') : 'Locate Me'}
+            </span>
+          </button>
+        )}
       </div>
     </header>
   );

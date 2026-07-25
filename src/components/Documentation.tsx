@@ -3,7 +3,7 @@ import { Code, Check, Copy, Database } from 'lucide-react';
 
 export const Documentation: React.FC = () => {
  const [copiedEndpoint, setCopiedEndpoint] = useState<string | null>(null);
- const [activeTab, setActiveTab] = useState<'forecast' | 'route'>('forecast');
+ const [activeTab, setActiveTab] = useState<'forecast' | 'route' | 'flow'>('forecast');
 
  const copyToClipboard = (text: string, id: string) => {
  navigator.clipboard.writeText(text);
@@ -49,6 +49,38 @@ export const Documentation: React.FC = () => {
  "riskLevel": "High Risk on Standard Route"
 }`;
 
+ const sampleFlowRequest = `{
+ "cityId": "delhi",
+ "nodes": [
+ {
+ "id": "node-cp",
+ "name": "Connaught Place",
+ "lat": 28.6315,
+ "lng": 77.2167
+ }
+ ]
+}`;
+
+ const sampleFlowResponse = `{
+ "success": true,
+ "nodes": [
+ {
+ "id": "node-cp",
+ "name": "Connaught Place",
+ "lat": 28.6315,
+ "lng": 77.2167,
+ "avgSpeedKmh": 18,
+ "status": "heavy",
+ "delayMinutes": 12
+ }
+ ]
+}`;
+
+ const requestSample =
+ activeTab === 'forecast' ? sampleForecastRequest : activeTab === 'route' ? sampleRouteRequest : sampleFlowRequest;
+ const responseSample =
+ activeTab === 'forecast' ? sampleForecastResponse : activeTab === 'route' ? sampleRouteResponse : sampleFlowResponse;
+
  return (
  <div className="w-full max-w-[1200px] mx-auto py-12 px-4 flex flex-col gap-12">
  {/* Title */}
@@ -86,6 +118,14 @@ export const Documentation: React.FC = () => {
  >
  POST /api/route-analyze
  </button>
+ <button
+ onClick={() => setActiveTab('flow')}
+ className={`px-4 py-1.5 text-[14px] font-medium rounded-[100px] transition-colors cursor-pointer ${
+ activeTab === 'flow' ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
+ }`}
+ >
+ POST /api/live-nodes-flow
+ </button>
  </div>
  </div>
 
@@ -97,10 +137,7 @@ export const Documentation: React.FC = () => {
  <span className="text-[length:var(--text-caption)] font-medium text-[var(--color-graphite)] tracking-[var(--tracking-caption)] uppercase">Sample Request Body</span>
  <button
  onClick={() =>
- copyToClipboard(
- activeTab === 'forecast' ? sampleForecastRequest : sampleRouteRequest,
- 'req'
- )
+ copyToClipboard(requestSample, 'req')
  }
  className="text-[length:var(--text-caption)] font-medium text-[var(--color-signal-green)] hover:opacity-80 flex items-center gap-1 cursor-pointer uppercase tracking-[var(--tracking-caption)]"
  >
@@ -109,7 +146,7 @@ export const Documentation: React.FC = () => {
  </button>
  </div>
  <pre className="bg-[var(--color-ink-black)] rounded-[var(--radius-lg)] p-6 text-[13px] text-[var(--color-paper-white)] overflow-x-auto h-[300px] shadow-[var(--shadow-inner)] leading-[1.6]">
- {activeTab === 'forecast' ? sampleForecastRequest : sampleRouteRequest}
+ {requestSample}
  </pre>
  </div>
 
@@ -119,10 +156,7 @@ export const Documentation: React.FC = () => {
  <span className="text-[length:var(--text-caption)] font-medium text-[var(--color-graphite)] tracking-[var(--tracking-caption)] uppercase">Expected Response (200 OK)</span>
  <button
  onClick={() =>
- copyToClipboard(
- activeTab === 'forecast' ? sampleForecastResponse : sampleRouteResponse,
- 'res'
- )
+ copyToClipboard(responseSample, 'res')
  }
  className="text-[length:var(--text-caption)] font-medium text-[var(--color-signal-green)] hover:opacity-80 flex items-center gap-1 cursor-pointer uppercase tracking-[var(--tracking-caption)]"
  >
@@ -131,7 +165,7 @@ export const Documentation: React.FC = () => {
  </button>
  </div>
  <pre className="bg-[var(--color-ink-black)] rounded-[var(--radius-lg)] p-6 text-[13px] text-[var(--color-paper-white)] overflow-x-auto h-[300px] shadow-[var(--shadow-inner)] leading-[1.6]">
- {activeTab === 'forecast' ? sampleForecastResponse : sampleRouteResponse}
+ {responseSample}
  </pre>
  </div>
  </div>

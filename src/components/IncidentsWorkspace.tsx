@@ -1,8 +1,9 @@
 import React from 'react';
-import { Incident, DispatchLogEntry } from '../types';
+import { Incident, DispatchLogEntry, RouteOption } from '../types';
 import { IncidentDispatch } from './IncidentDispatch';
 import { HinglishReportForm } from './HinglishReportForm';
 import { DispatchLog } from './DispatchLog';
+import { RouteDetours } from './RouteDetours';
 
 interface IncidentsWorkspaceProps {
   incidents: Incident[];
@@ -12,6 +13,11 @@ interface IncidentsWorkspaceProps {
   onReloadIncidents?: () => void;
   onReportHinglish?: (text: string) => Promise<void>;
   dispatchLogs: DispatchLogEntry[];
+  availableRoutes: RouteOption[];
+  selectedRouteId: string | null;
+  onSelectRouteId: (id: string) => void;
+  onDeployRoute: (route: RouteOption) => void;
+  onNavigateToPlanner: () => void;
 }
 
 export const IncidentsWorkspace: React.FC<IncidentsWorkspaceProps> = ({
@@ -22,6 +28,11 @@ export const IncidentsWorkspace: React.FC<IncidentsWorkspaceProps> = ({
   onReloadIncidents,
   onReportHinglish,
   dispatchLogs,
+  availableRoutes,
+  selectedRouteId,
+  onSelectRouteId,
+  onDeployRoute,
+  onNavigateToPlanner,
 }) => {
   return (
     <div className="w-full max-w-[1200px] mx-auto flex flex-col items-center gap-8 animate-zoom-in relative mb-12">
@@ -51,6 +62,13 @@ export const IncidentsWorkspace: React.FC<IncidentsWorkspaceProps> = ({
 
         {/* Right Column */}
         <div className="flex flex-col gap-[var(--element-gap)]">
+          <RouteDetours
+            routes={availableRoutes}
+            selectedRouteId={selectedRouteId}
+            onSelectRouteId={onSelectRouteId}
+            onDeployRoute={onDeployRoute}
+            onNavigateToRoutePlanner={onNavigateToPlanner}
+          />
           <DispatchLog logs={dispatchLogs} />
         </div>
       </div>

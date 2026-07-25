@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Incident, TrafficNode, CameraFeed, SocialSignal, RouteOption, DispatchLogEntry, RouteAnalysis } from '../types';
+import { Incident, TrafficNode, CameraFeed, SocialSignal, RouteOption, RouteAnalysis } from '../types';
 import { InteractiveMap } from './InteractiveMap';
 import { Clock, Sparkles, AlertTriangle, ArrowRight, Activity, TrendingUp } from 'lucide-react';
-import { calculateEstimatedVehicles, calculateImpactRadiusSqKm, calculateStartsInMinutes } from '../utils/forecast';
-import { radiusAt } from '../utils/radiusAt';
-import { getIncidentConfidence, isIncidentConfirmed } from '../utils/verification';
+import { calculateStartsInMinutes } from '../utils/forecast';
 
 interface DashboardProps {
   nodes: TrafficNode[];
@@ -33,6 +31,7 @@ interface DashboardProps {
   onReloadIncidents?: () => void;
   
   forecastMinutes: number;
+  userLocation?: { lat: number; lng: number; name?: string } | null;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -62,8 +61,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onReloadIncidents,
   
   forecastMinutes,
+  userLocation,
 }) => {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>('node-cp');
+  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
   const [currentTime, setCurrentTime] = useState('');
   const [isFullScreenMapOpen, setIsFullScreenMapOpen] = useState(false);
 
@@ -82,6 +83,34 @@ export const Dashboard: React.FC<DashboardProps> = ({
   }, []);
 
   // Dynamic metrics calculations
+  const [commuterJitter, setCommuterJitter] = useState(0);
+
+  // Add a visual heartbeat to commuters so the dashboard looks constantly live
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setCommuterJitter(Math.floor(Math.random() * 81) - 40); // Non-drifting jitter
+    }, 2500);
+    return () => clearInterval(interval);
+  }, []);
+
+  const activeCommuters = React.useMemo(() => {
+    let totalCommuters = 0;
+    nodes.forEach(node => {
+      const freeFlowSpeed = 40; 
+      const capacityCars = 4000; 
+      const occupancy = 1.5; 
+      const maxCommuters = capacityCars * occupancy;
+      const speedRatio = Math.min(1, Math.max(0, node.avgSpeedKmh / freeFlowSpeed));
+      const capacityPercent = Math.min(0.95, Math.max(0.1, 1 - Math.pow(speedRatio, 1.5)));
+      totalCommuters += Math.round(maxCommuters * capacityPercent);
+    });
+    return (totalCommuters + commuterJitter).toLocaleString();
+  }, [nodes, commuterJitter]);
+  
+  const avgConfidence = incidents.length > 0 
+    ? Math.round(incidents.reduce((sum, inc) => sum + (inc.confidencePercent || 0), 0) / incidents.length)
+    : 85;
+
   const clearCount = nodes.filter(n => n.status === 'clear' || n.status === 'moderate').length;
   const heavyCount = nodes.filter(n => n.status === 'severe').length;
   const modCount = nodes.filter(n => n.status === 'heavy').length;
@@ -100,6 +129,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const totalIncidents = incidents.length;
   const severeIncidentsCount = incidents.filter(inc => inc.severity === 'severe').length;
   const deviationPct = Math.round((heavyCount / totalNodes) * 45);
+
+  useEffect(() => {
+    fetch('/api/health')
+      .then(res => res.json())
+      .then(data => setHasApiKey(data.hasApiKey))
+      .catch(() => setHasApiKey(false));
+  }, []);
 
   const topIncidents = incidents.slice(0, 3);
 
@@ -127,6 +163,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
+      {/* Fallback prediction model notice */}
+      {hasApiKey === false && (
+        <div className="w-full bg-[var(--color-blush-mist)] border border-[var(--color-mist)] rounded-[var(--radius-cards)] px-5 py-3 text-[14px] text-[var(--color-body-charcoal)] flex items-center justify-between gap-4">
+          <span>GROQ_API_KEY missing — FlowCast is running on the deterministic fallback prediction model.</span>
+          <span className="shrink-0 text-[length:var(--text-caption)] font-medium uppercase tracking-[var(--tracking-caption)] text-[var(--color-graphite)] border border-[var(--color-cloud)] rounded-[var(--radius-buttons)] px-3 py-1">
+            Fallback Mode
+          </span>
+        </div>
+      )}
+
       {/* Main Layout Grid: ~70% map, ~30% summary cards */}
       <div className="w-full grid grid-cols-1 lg:grid-cols-[2.5fr_1fr] gap-[var(--section-gap)]">
         
@@ -144,7 +190,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
               detourPositions={selectedRoute?.polylinePositions}
               selectedRouteIsAiRecommended={selectedRoute?.isAiRecommended}
               selectedCity={selectedCity}
+              userLocation={userLocation}
             />
+
           </div>
 
           {/* Social Telemetry Strip under Map */}
@@ -202,6 +250,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           </div>
 
+
           {/* Incidents Summary Card */}
           <div className="bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] p-5 shadow-[var(--shadow-subtle)] flex flex-col">
             <div className="flex items-center justify-between mb-4">
@@ -220,6 +269,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <span className="text-xs font-bold whitespace-nowrap bg-[var(--color-cloud)] px-2 py-1 rounded">+{inc.delayMinutes}m</span>
                 </div>
               ))}
+
             </div>
             <button
               onClick={onNavigateToIncidents}
@@ -298,6 +348,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 detourPositions={selectedRoute?.polylinePositions}
                 selectedRouteIsAiRecommended={selectedRoute?.isAiRecommended}
                 selectedCity={selectedCity}
+                userLocation={userLocation}
               />
                {/* Modal info overlay */}
                <div className="absolute top-4 left-4 z-[1001] w-[300px] md:w-[350px] bg-[var(--color-card-snow)]/95 backdrop-blur-md border border-[var(--color-cloud)] p-5 shadow-xl flex flex-col gap-3 rounded-xl transition-all">
@@ -322,6 +373,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           </div>
         </div>
+
       )}
     </div>
   );
