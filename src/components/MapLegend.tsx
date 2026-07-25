@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronUp, ChevronDown } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface MapLegendProps {
   showTraffic: boolean;
@@ -8,6 +8,7 @@ interface MapLegendProps {
   showIncidents: boolean;
   showAlternativeRoutes: boolean;
   hasUserLocation: boolean;
+  onClose: () => void;
 }
 
 const Swatch: React.FC<{ color: string; ring?: boolean; dashed?: boolean }> = ({ color, ring, dashed }) => (
@@ -48,69 +49,71 @@ export const MapLegend: React.FC<MapLegendProps> = ({
   showIncidents,
   showAlternativeRoutes,
   hasUserLocation,
+  onClose,
 }) => {
-  const [open, setOpen] = React.useState(false);
-
   return (
-    <div className="relative">
-      {open && (
-        <div className="absolute bottom-full left-0 mb-2 w-[240px] max-h-[380px] overflow-y-auto bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] shadow-[var(--shadow-sm)] p-4 flex flex-col gap-4 z-[1001]">
-          {showTraffic && (
-            <Group title="Junctions">
-              <Row><Swatch color="#059669" /><span>Clear — 42 km/h and above</span></Row>
-              <Row><Swatch color="#2563EB" /><span>Moderate — 28-42 km/h</span></Row>
-              <Row><Swatch color="#D97706" /><span>Heavy — 18-28 km/h</span></Row>
-              <Row><Swatch color="#D93B2D" /><span>Severe — under 18 km/h</span></Row>
-              <Row><Line color="#059669" /><span>Flow line, solid = moving</span></Row>
-              <Row><Line color="#D97706" dashed /><span>Flow line, dashed = congested</span></Row>
-            </Group>
-          )}
+    <div
+      className={`absolute left-4 z-[1001] w-[230px] overflow-y-auto bg-[var(--color-card-snow)] border border-[var(--color-cloud)] rounded-[var(--radius-cards)] shadow-[var(--shadow-sm)] p-4 flex flex-col gap-4 ${
+        hasUserLocation ? 'top-16 max-h-[calc(100%-9.5rem)]' : 'top-4 max-h-[calc(100%-7.5rem)]'
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[length:var(--text-caption)] font-medium uppercase tracking-[var(--tracking-caption)] text-[var(--color-ink-black)]">
+          Map Legend
+        </span>
+        <button
+          onClick={onClose}
+          title="Hide legend"
+          className="p-1 rounded-[var(--radius-buttons)] text-[var(--color-steel-gray)] hover:text-[var(--color-ink-black)] hover:bg-[var(--color-paper-white)] transition-colors cursor-pointer border-none bg-transparent"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
 
-          {showIncidents && (
-            <Group title="Incidents">
-              <Row><Swatch color="#D93B2D" ring /><span>Confirmed disruption</span></Row>
-              <Row><Swatch color="#D97706" ring /><span>Unverified warning</span></Row>
-              <Row><span className="text-[11px] text-[var(--color-steel-gray)]">Circle grows with the forecast horizon</span></Row>
-            </Group>
-          )}
-
-          {showHeatmap && (
-            <Group title="Heatmap">
-              <Row><Swatch color="#D93B2D" /><span>Wash = predicted spread, by severity</span></Row>
-            </Group>
-          )}
-
-          {showWeather && (
-            <Group title="Weather">
-              <Row><Swatch color="#6D28D9" ring dashed /><span>Storm cell, drifts with forecast</span></Row>
-              <Row><Swatch color="#2563EB" ring /><span>Flood-prone underpass</span></Row>
-            </Group>
-          )}
-
-          {showAlternativeRoutes && (
-            <Group title="Routes">
-              <Row><Line color="#10B981" dashed /><span>AI recommended detour</span></Row>
-              <Row><Line color="#D93B2D" dashed /><span>Standard route</span></Row>
-            </Group>
-          )}
-
-          {hasUserLocation && (
-            <Group title="You">
-              <Row><Swatch color="#2563EB" /><span>Your GPS fix</span></Row>
-            </Group>
-          )}
-        </div>
+      {showTraffic && (
+        <Group title="Junctions">
+          <Row><Swatch color="#059669" /><span>Clear — 42 km/h and above</span></Row>
+          <Row><Swatch color="#2563EB" /><span>Moderate — 28-42 km/h</span></Row>
+          <Row><Swatch color="#D97706" /><span>Heavy — 18-28 km/h</span></Row>
+          <Row><Swatch color="#D93B2D" /><span>Severe — under 18 km/h</span></Row>
+          <Row><Line color="#059669" /><span>Flow line, solid = moving</span></Row>
+          <Row><Line color="#D97706" dashed /><span>Flow line, dashed = congested</span></Row>
+        </Group>
       )}
 
-      <button
-        onClick={() => setOpen(!open)}
-        className={`px-3 py-1.5 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
-          open ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
-        }`}
-      >
-        <span>Legend</span>
-        {open ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-      </button>
+      {showIncidents && (
+        <Group title="Incidents">
+          <Row><Swatch color="#D93B2D" ring /><span>Confirmed disruption</span></Row>
+          <Row><Swatch color="#D97706" ring /><span>Unverified warning</span></Row>
+          <Row><span className="text-[11px] text-[var(--color-steel-gray)]">Circle grows with the forecast horizon</span></Row>
+        </Group>
+      )}
+
+      {showHeatmap && (
+        <Group title="Heatmap">
+          <Row><Swatch color="#D93B2D" /><span>Wash = predicted spread, by severity</span></Row>
+        </Group>
+      )}
+
+      {showWeather && (
+        <Group title="Weather">
+          <Row><Swatch color="#6D28D9" ring dashed /><span>Storm cell, drifts with forecast</span></Row>
+          <Row><Swatch color="#2563EB" ring /><span>Flood-prone underpass</span></Row>
+        </Group>
+      )}
+
+      {showAlternativeRoutes && (
+        <Group title="Routes">
+          <Row><Line color="#10B981" dashed /><span>AI recommended detour</span></Row>
+          <Row><Line color="#D93B2D" dashed /><span>Standard route</span></Row>
+        </Group>
+      )}
+
+      {hasUserLocation && (
+        <Group title="You">
+          <Row><Swatch color="#2563EB" /><span>Your GPS fix</span></Row>
+        </Group>
+      )}
     </div>
   );
 };

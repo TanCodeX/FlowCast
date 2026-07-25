@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TrafficNode, Incident } from '../types';
-import { AlertTriangle, Layers, Activity, CloudRain, Zap } from 'lucide-react';
+import { AlertTriangle, Layers, Activity, CloudRain, Zap, Info } from 'lucide-react';
 import { MapContainer, TileLayer, CircleMarker, Circle, Polyline, Popup, Tooltip, LayerGroup, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Circle as LeafletCircle, Map as LeafletMap } from 'leaflet';
@@ -220,6 +220,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  const [showTraffic, setShowTraffic] = useState(true);
  const [showWeather, setShowWeather] = useState(true);
  const [currentTime, setCurrentTime] = useState('');
+ const [showLegend, setShowLegend] = useState(false);
  const [mapEngine, setMapEngine] = useState<'leaflet' | 'maplibre' | 'openlayers' | 'google-road' | 'google-satellite'>('leaflet');
 
  useEffect(() => {
@@ -682,6 +683,19 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  <span>AI Detours</span>
  </button>
 
+ <button
+ onClick={() => setShowLegend(!showLegend)}
+ className={`px-3 py-1.5 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer rounded-[100px] border-none ${
+ showLegend ? 'bg-[var(--color-ink-black)] text-white' : 'text-[var(--color-body-charcoal)] hover:text-[var(--color-ink-black)]'
+ }`}
+ >
+ <Info className="w-3.5 h-3.5" />
+ <span>Legend</span>
+ </button>
+ </div>
+
+ {/* Legend card — pinned to the left edge of the map */}
+ {showLegend && (
  <MapLegend
  showTraffic={showTraffic}
  showWeather={showWeather}
@@ -689,8 +703,9 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
  showIncidents={showIncidents}
  showAlternativeRoutes={showAlternativeRoutes}
  hasUserLocation={!!userLocation}
+ onClose={() => setShowLegend(false)}
  />
- </div>
+ )}
 
  {/* GPS Fix Badge */}
  {userLocation && (
